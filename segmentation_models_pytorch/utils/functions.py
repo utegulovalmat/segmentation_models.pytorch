@@ -1,5 +1,6 @@
 import torch
 import os
+import cv2
 import shutil
 import albumentations as A
 import matplotlib.pyplot as plt
@@ -101,15 +102,23 @@ def combine_masks(image, mask):
     return masksum, masked
 
 
-def get_training_augmentation():
-    train_transform = [
+def get_train_augmentation(hw_len=512):
+    transform = [
         A.HorizontalFlip(p=0.5),
-        A.Rotate(p=0.5),
+        A.Rotate(limit=10, p=0.5),
         A.RandomScale(p=0.5),
-        # A.PadIfNeeded(min_height=224, min_width=224, always_apply=True, border_mode=cv2.BORDER_CONSTANT),
-        # A.CenterCrop(height=224, width=224, always_apply=True),
+        A.PadIfNeeded(min_height=hw_len, min_width=hw_len, always_apply=True, border_mode=cv2.BORDER_CONSTANT),
+        A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
     ]
-    return A.Compose(train_transform)
+    return A.Compose(transform)
+
+
+def get_test_augmentation(hw_len=512):
+    transform = [
+        A.PadIfNeeded(min_height=hw_len, min_width=hw_len, always_apply=True, border_mode=cv2.BORDER_CONSTANT),
+        A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
+    ]
+    return A.Compose(transform)
 
 
 def visualize(**images):
@@ -117,8 +126,8 @@ def visualize(**images):
     Helper function for data visualization"""
     n = len(images)
     plt.figure(figsize=(16, 5))
-    for i, (name, image) in enumerate(images.items()):
-        plt.subplot(1, n, slice_index + 1)
+    for idx, (name, image) in enumerate(images.items()):
+        plt.subplot(1, n, idx + 1)
         plt.xticks([])
         plt.yticks([])
         plt.title(' '.join(name.split('_')).title())

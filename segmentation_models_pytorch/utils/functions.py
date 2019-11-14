@@ -355,6 +355,7 @@ def extract_slices_from_volumes(
     # Export slices from dimension 0
     start_idx = 0
     slices_cnt_dim_0 = sum([x for x, y, z in volume_shapes])
+    with_masks_dim_0 = slices_cnt_dim_0
     if '0' in use_dimensions:
         for idx in range(start_idx, slices_cnt_dim_0):
             npy_image, npy_mask = load_image_and_mask(
@@ -365,17 +366,20 @@ def extract_slices_from_volumes(
                 mask_volumes=mask_volumes,
             )
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
+                with_masks_dim_0 -= 1
                 continue
             base_fn = str(idx).zfill(4)
             image_fn = base_fn + '.tiff'
             mask_fn =  base_fn + '_seg.tiff'
             save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
             save_slice_as_tiff_image(npy_mask, convert_format='L', output_dir=output_dir, new_title=mask_fn)
-        print('exported slices dim 1:', slices_cnt_dim_0)
+        print('exported slices dim 0:', slices_cnt_dim_0)
+        print('with mask dim 0:', with_masks_dim_0)
 
     # Export slices from dimension 1
     start_idx = slices_cnt_dim_0
     slices_cnt_dim_1 = sum([y for x, y, z in volume_shapes])
+    with_masks_dim_1 = slices_cnt_dim_1
     if '1' in use_dimensions:
         for idx in range(start_idx, slices_cnt_dim_1 + start_idx):
             npy_image, npy_mask = load_image_and_mask(
@@ -386,6 +390,7 @@ def extract_slices_from_volumes(
                 mask_volumes=mask_volumes,
             )
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
+                with_masks_dim_1 -= 1
                 continue
             base_fn = str(idx).zfill(4)
             image_fn = base_fn + '.tiff'
@@ -393,10 +398,12 @@ def extract_slices_from_volumes(
             save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
             save_slice_as_tiff_image(npy_mask, convert_format='L', output_dir=output_dir, new_title=mask_fn)
         print('exported slices dim 1:', slices_cnt_dim_1)
+        print('with mask dim 1:', with_masks_dim_1)
 
     # Export slices from dimension 2
     start_idx = slices_cnt_dim_0 + slices_cnt_dim_1
     slices_cnt_dim_2 = sum([z for x, y, z in volume_shapes])
+    with_masks_dim_2 = slices_cnt_dim_2
     if '2' in use_dimensions:
         for idx in range(start_idx, slices_cnt_dim_2 + start_idx):
             npy_image, npy_mask = load_image_and_mask(
@@ -407,6 +414,7 @@ def extract_slices_from_volumes(
                 mask_volumes=mask_volumes,
             )
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
+                with_masks_dim_2 -= 1
                 continue
             base_fn = str(idx).zfill(4)
             image_fn = base_fn + '.tiff'
@@ -414,4 +422,5 @@ def extract_slices_from_volumes(
             save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
             save_slice_as_tiff_image(npy_mask, convert_format='L', output_dir=output_dir, new_title=mask_fn)
         print('exported slices dim 2:', slices_cnt_dim_2)
+        print('with mask dim 2:', with_masks_dim_2)
     return True

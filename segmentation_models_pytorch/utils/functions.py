@@ -89,6 +89,7 @@ def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, activation='sigmoid'):
 #### Useful functions ###########################
 #################################################
 
+
 def combine_masks(image, mask):
     """
     Overlay mask layers into single mask
@@ -215,9 +216,14 @@ def normalize_0_1(x):
 
 def read_volume(filepath):
     img_data, header = nrrd.read(filepath)
-    #     img = nib.load(filepath)
-    #     img = nib.as_closest_canonical(img)
-    #     img_data = img.get_fdata()
+    return img_data
+
+
+def read_volume_nifty(filepath):
+    """For nii.gz data type"""
+    img = nib.load(filepath)
+    img = nib.as_closest_canonical(img)
+    img_data = img.get_fdata()
     return img_data
 
 
@@ -408,7 +414,6 @@ def extract_slices_from_volumes(
 
     # Export slices from dimension 1
     start_idx = slices_cnt_dim_0
-    print('start_idx', start_idx)
     slices_cnt_dim_1 = sum([y for x, y, z in volume_shapes])
     with_masks_dim_1 = slices_cnt_dim_1
     if '1' in use_dimensions:
@@ -420,7 +425,6 @@ def extract_slices_from_volumes(
                 image_volumes=image_volumes,
                 mask_volumes=mask_volumes,
             )
-            print(len(np.unique(npy_mask)), np.unique(npy_mask))
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
                 with_masks_dim_1 -= 1
                 continue

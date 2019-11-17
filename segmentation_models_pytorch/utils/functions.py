@@ -234,7 +234,7 @@ def read_slices(images, masks):
         image = read_volume(image_fn)
         mask = np.uint8(read_volume(mask_fn))
         # Remove black slices from all sides
-        image, mask = remove_all_blacks(image, mask, only_with_target=True)
+        # image, mask = remove_all_blacks(image, mask, only_with_target=True)
         _images.append(image)
         _masks.append(mask)
     return _images, _masks
@@ -243,10 +243,10 @@ def read_slices(images, masks):
 def load_image_and_mask(slice_index, single_dimension, use_dimension, image_volumes, mask_volumes):
     """ Extracts volume slice with index `slice_index`
 
-    Volumes must be corresponding orders.
+    Volumes must be in corresponding order with masks.
 
     image_volumes:      3D numpy array
-    mask_volumes:      3D numpy array
+    mask_volumes:       3D numpy array
     single_dimension:   Use all 3D volume or 1 view dimension
                         True / False
     use_dimension:      Use only one of dimensions of 3D volume
@@ -384,12 +384,10 @@ def extract_slices_from_volumes(
     print('volumes shapes', volume_shapes)
 
     # Export slices from dimension 0
-    start_idx = 0
-    print('start_idx', start_idx)
     slices_cnt_dim_0 = sum([x for x, y, z in volume_shapes])
     with_masks_dim_0 = slices_cnt_dim_0
     if '0' in use_dimensions:
-        for idx in range(start_idx, slices_cnt_dim_0):
+        for idx in range(0, slices_cnt_dim_0):
             npy_image, npy_mask = load_image_and_mask(
                 idx,
                 single_dimension=True,
@@ -400,7 +398,7 @@ def extract_slices_from_volumes(
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
                 with_masks_dim_0 -= 1
                 continue
-            base_fn = str(idx).zfill(4)
+            base_fn = str(idx).zfill(7)
             image_fn = base_fn + '.tiff'
             mask_fn =  base_fn + '_seg.tiff'
             save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
@@ -414,7 +412,7 @@ def extract_slices_from_volumes(
     slices_cnt_dim_1 = sum([y for x, y, z in volume_shapes])
     with_masks_dim_1 = slices_cnt_dim_1
     if '1' in use_dimensions:
-        for idx in range(start_idx, slices_cnt_dim_1 + start_idx):
+        for idx in range(0, slices_cnt_dim_1):
             npy_image, npy_mask = load_image_and_mask(
                 idx,
                 single_dimension=True,
@@ -422,10 +420,11 @@ def extract_slices_from_volumes(
                 image_volumes=image_volumes,
                 mask_volumes=mask_volumes,
             )
+            print(len(np.unique(npy_mask)), np.unique(npy_mask))
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
                 with_masks_dim_1 -= 1
                 continue
-            base_fn = str(idx).zfill(4)
+            base_fn = str(idx + start_idx).zfill(7)
             image_fn = base_fn + '.tiff'
             mask_fn = base_fn + '_seg.tiff'
             save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
@@ -435,11 +434,10 @@ def extract_slices_from_volumes(
 
     # Export slices from dimension 2
     start_idx = slices_cnt_dim_0 + slices_cnt_dim_1
-    print('start_idx', start_idx)
     slices_cnt_dim_2 = sum([z for x, y, z in volume_shapes])
     with_masks_dim_2 = slices_cnt_dim_2
     if '2' in use_dimensions:
-        for idx in range(start_idx, slices_cnt_dim_2 + start_idx):
+        for idx in range(0, slices_cnt_dim_2):
             npy_image, npy_mask = load_image_and_mask(
                 idx,
                 single_dimension=True,
@@ -450,7 +448,7 @@ def extract_slices_from_volumes(
             if skip_empty_mask and len(np.unique(npy_mask)) == 1:
                 with_masks_dim_2 -= 1
                 continue
-            base_fn = str(idx).zfill(4)
+            base_fn = str(idx + start_idx).zfill(7)
             image_fn = base_fn + '.tiff'
             mask_fn = base_fn + '_seg.tiff'
             save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)

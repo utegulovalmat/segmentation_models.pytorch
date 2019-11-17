@@ -61,7 +61,7 @@ class MriDataset(BaseDataset):
         image = np.dstack([image, image, image])
 
         mask = self.load_mask(image_id)
-        mask = np.expand_dims(mask, axis=0)  # add unit dimension
+        mask = np.expand_dims(mask, axis=-1)  # add unit dimension
 
         # apply augmentations
         if self.augmentation:
@@ -90,7 +90,7 @@ class MriDataset(BaseDataset):
         image = normalize_0_1(image)
         # Bin values to 0/255 range
         # image = exposure.equalize_hist(image) # put it 0/255 range
-        # image = exposure.equalize_adapthist(data) [TODO:] try it
+        # image = exposure.equalize_adapthist(data)
         # print(np.unique(image), image.min(), image.max())
         # img.view(width, height, 1).expand(-1, -1, 3)
         # print(image.shape, image.min(), image.max())

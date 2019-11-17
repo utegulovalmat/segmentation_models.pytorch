@@ -121,6 +121,28 @@ def get_test_augmentation(hw_len=512):
     return A.Compose(transform)
 
 
+def to_tensor(x, **kwargs):
+    return x.transpose(2, 0, 1).astype('float32')
+
+
+def get_preprocessing(preprocessing_fn=None):
+    """Construct preprocessing transform
+
+    Args:
+        preprocessing_fn (callbale): data normalization function
+            (can be specific for each pretrained neural network)
+    Return:
+        transform: albumentations.Compose
+
+    """
+
+    _transform = [
+        # albu.Lambda(image=preprocessing_fn),
+        albu.Lambda(image=to_tensor, mask=to_tensor),
+    ]
+    return A.Compose(_transform)
+
+
 def visualize(**images):
     """Plot images in one row.
     Helper function for data visualization"""

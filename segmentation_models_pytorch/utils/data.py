@@ -61,7 +61,7 @@ class MriDataset(BaseDataset):
         image = np.dstack([image, image, image])
 
         mask = self.load_mask(image_id)
-        mask = np.expand_dims(mask, axis=-1)  # add unit dimension
+        mask = np.expand_dims(mask, axis=0)  # add unit dimension
 
         # apply augmentations
         if self.augmentation:

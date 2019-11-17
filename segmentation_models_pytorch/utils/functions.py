@@ -137,8 +137,8 @@ def get_preprocessing(preprocessing_fn=None):
     """
 
     _transform = [
-        # albu.Lambda(image=preprocessing_fn),
-        albu.Lambda(image=to_tensor, mask=to_tensor),
+        # A.Lambda(image=preprocessing_fn),
+        A.Lambda(image=to_tensor, mask=to_tensor),
     ]
     return A.Compose(_transform)
 

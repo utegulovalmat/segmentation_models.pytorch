@@ -150,7 +150,10 @@ def read_volume(filepath):
 
 
 def read_volume_nifty(filepath):
-    """For nii.gz data type"""
+    """For nii.gz data type
+    pip install nibabel
+    import nibabel as nib
+    """
     img = nib.load(filepath)
     img = nib.as_closest_canonical(img)
     img_data = img.get_fdata()

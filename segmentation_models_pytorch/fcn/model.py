@@ -138,25 +138,33 @@ def main():
     testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=True,)
 
     # Init model
-    # model = FCN()
+    model = FCN()
     # print(model.fc1)
-    model = sequential_model()
+    # model = sequential_model()
     # print(model[0])
     # print(summary(model, input_size=(1, 64, 64)))
 
-    # Train model ====================
+    # Train model
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4
     )
     best_model = train(
         model=model,
         optimizer=optimizer,
-        num_epochs=3,
+        num_epochs=1,
         train_loader=trainloader,
         valid_loader=testloader,
     )
     print(best_model)
     # print(best_model.state_dict())
+
+    # View prediction
+    images, labels = next(iter(testloader))
+    images.resize_(64, 1, 784)
+    img_idx = 0
+    ps = best_model.forward(images[img_idx, :])
+    print(ps)  # softmax output probabilities
+    view_classify(images[0].view(1, 28, 28), ps)
 
 
 def train(model, optimizer, num_epochs, train_loader, valid_loader):

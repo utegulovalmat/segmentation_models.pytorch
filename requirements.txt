@@ -1,8 +1,8 @@
 torch
-torchvision>=0.2.2,<=0.4.0
-pretrainedmodels==0.7.4
-efficientnet-pytorch==0.4.0
 pynrrd
 albumentations
 matplotlib
 pre-commit
+torchvision>=0.3.0
+pretrainedmodels==0.7.4
+efficientnet-pytorch>=0.5.1

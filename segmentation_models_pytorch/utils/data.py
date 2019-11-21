@@ -3,13 +3,13 @@ from torch.utils.data import Dataset as BaseDataset
 
 import os
 import numpy as np
-from .functions import read_pil_image
-from .functions import normalize_0_1
+from .custom_functions import read_pil_image
+from .custom_functions import normalize_0_1
 
 
-EXPORTED_SLICES_DIR_TRAIN = './export_slices_train/'
-EXPORTED_SLICES_DIR_VALID = './export_slices_valid/'
-EXPORTED_SLICES_DIR_TEST = './export_slices_test/'
+EXPORTED_SLICES_DIR_TRAIN = "./export_slices_train/"
+EXPORTED_SLICES_DIR_VALID = "./export_slices_valid/"
+EXPORTED_SLICES_DIR_TEST = "./export_slices_test/"
 
 
 class MriDataset(BaseDataset):
@@ -29,29 +29,27 @@ class MriDataset(BaseDataset):
     test_dataset = MriDataset(mode='test', augmentation=get_test_augmentation(), preprocessing=None)
     print(len(test_dataset))
     """
-    CLASSES = ['1']
+
+    CLASSES = ["1"]
 
     def __init__(
-            self,
-            mode,
-            augmentation=None,
-            preprocessing=None,
+        self, mode, augmentation=None, preprocessing=None,
     ):
         self.augmentation = augmentation
         self.preprocessing = preprocessing
         self.mode = mode  # train valid test
-        if self.mode == 'train':
+        if self.mode == "train":
             self.exported_slices_dir = EXPORTED_SLICES_DIR_TRAIN
-        elif self.mode == 'valid':
+        elif self.mode == "valid":
             self.exported_slices_dir = EXPORTED_SLICES_DIR_VALID
-        elif self.mode == 'test':
+        elif self.mode == "test":
             self.exported_slices_dir = EXPORTED_SLICES_DIR_TEST
         else:
             raise
 
         all_fns = sorted(os.listdir(self.exported_slices_dir))
-        self.image_fns = [fn for fn in all_fns if 'seg' not in fn]
-        self.mask_fns = [fn for fn in all_fns if 'seg' in fn]
+        self.image_fns = [fn for fn in all_fns if "seg" not in fn]
+        self.mask_fns = [fn for fn in all_fns if "seg" in fn]
         assert len(self.mask_fns) == len(self.image_fns)
 
         self.slices_cnt = len(self.mask_fns)
@@ -66,12 +64,12 @@ class MriDataset(BaseDataset):
         # apply augmentations
         if self.augmentation:
             sample = self.augmentation(image=image, mask=mask)
-            image, mask = sample['image'], sample['mask']
+            image, mask = sample["image"], sample["mask"]
 
         # apply preprocessing
         if self.preprocessing:
             sample = self.preprocessing(image=image, mask=mask)
-            image, mask = sample['image'], sample['mask']
+            image, mask = sample["image"], sample["mask"]
 
         return image, mask
 

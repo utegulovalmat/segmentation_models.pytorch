@@ -45,18 +45,10 @@ def dice_loss(pred, target, smooth=1.0):
     return loss.mean()
 
 
-def calc_loss(pred, target, metrics, bce_weight=0.5):
-    bce = F.binary_cross_entropy_with_logits(pred, target)
-
-    pred = F.sigmoid(pred)
-    dice = dice_loss(pred, target)
-
-    loss = bce * bce_weight + dice * (1 - bce_weight)
-
-    metrics["bce"] += bce.data.cpu().numpy() * target.size(0)
-    metrics["dice"] += dice.data.cpu().numpy() * target.size(0)
+def calc_loss(pred, target, metrics):
+    criterion = nn.NLLLoss()
+    loss = criterion(pred, target)
     metrics["loss"] += loss.data.cpu().numpy() * target.size(0)
-
     return loss
 
 
@@ -140,69 +132,87 @@ def main():
     )
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True,)
 
+    testset = datasets.MNIST(
+        "~/.pytorch/MNIST_data/", download=True, train=False, transform=transform
+    )
+    testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=True,)
+
     # Init model
-    model = FCN()
-    print(model.fc1)
-    # model = sequential_model()
+    # model = FCN()
+    # print(model.fc1)
+    model = sequential_model()
     # print(model[0])
     # print(summary(model, input_size=(1, 64, 64)))
 
     # Train model ====================
-
-    # freeze backbone layers
-    # for l in model.base_layers:
-    #    for param in l.parameters():
-    #        param.requires_grad = False
-
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4
     )
     best_model = train(
-        model=model, optimizer=optimizer, num_epochs=1, train_loader=trainloader,
+        model=model,
+        optimizer=optimizer,
+        num_epochs=3,
+        train_loader=trainloader,
+        valid_loader=testloader,
     )
     print(best_model)
+    # print(best_model.state_dict())
 
 
-def train(model, optimizer, num_epochs, train_loader):
+def train(model, optimizer, num_epochs, train_loader, valid_loader):
     best_model_weights = copy.deepcopy(model.state_dict())
     best_loss = 1e10
 
+    # Freeze backbone layers
+    # for l in model.base_layers:
+    #    for param in l.parameters():
+    #        param.requires_grad = False
+
+    device = torch.device("cpu")
+
+    dataloaders = {
+        "train": train_loader,
+        "val": valid_loader,
+    }
     for epoch in range(num_epochs):
         print("Epoch {}/{}".format(epoch, num_epochs - 1))
         print("-" * 10)
+
         since = time.time()
 
-        model.train()  # Set model to training mode
-        metrics = defaultdict(float)
-        epoch_samples = 0
+        # Each epoch has a training and validation phase
+        for phase in ["train", "val"]:
+            if phase == "train":
+                for param_group in optimizer.param_groups:
+                    print("LR", param_group["lr"])
+                model.train()  # Set model to training mode
+            else:
+                model.eval()  # Set model to evaluate mode
 
-        # Grab some data
-        for inputs, labels in train_loader:
-            print(type(inputs), inputs.shape, labels.shape)
+            metrics = defaultdict(float)
+            epoch_samples = 0
 
-            # zero the parameter gradients
-            optimizer.zero_grad()
+            for inputs, labels in dataloaders[phase]:
+                inputs = inputs.view(inputs.shape[0], -1)
+                inputs = inputs.to(device)
+                labels = labels.to(device)
 
-            # forward pass
-            with torch.set_grad_enabled(True):
-                outputs = model(inputs)
-                loss = calc_loss(outputs, labels, metrics)
-                loss.backward()
-                optimizer.step()
+                # zero the parameter gradients
+                optimizer.zero_grad()
 
-            # statistics
-            epoch_samples += inputs.size(0)
+                # forward
+                # track history if only in train
+                with torch.set_grad_enabled(phase == "train"):
+                    outputs = model(inputs)
+                    loss = calc_loss(outputs, labels, metrics)
 
-            # Resize inputs into a 1D vector,
-            # new shape is (batch size, color channels, image pixels)
-            inputs.resize_(64, 1, 784)
+                    # backward + optimize only if in training phase
+                    if phase == "train":
+                        loss.backward()
+                        optimizer.step()
 
-            # Forward pass through the network
-            img_idx = 0
-            ps = model.forward(inputs[img_idx, :])
-            print(ps)  # softmax output
-            view_classify(inputs[0].view(1, 28, 28), ps)
-            break
+                # statistics
+                epoch_samples += inputs.size(0)
 
             print_metrics(metrics, epoch_samples, phase)
             epoch_loss = metrics["loss"] / epoch_samples

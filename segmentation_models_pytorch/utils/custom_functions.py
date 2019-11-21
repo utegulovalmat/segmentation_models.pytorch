@@ -1,4 +1,3 @@
-import torch
 import os
 import cv2
 import shutil
@@ -8,86 +7,7 @@ import nrrd
 import numpy as np
 from PIL import Image
 
-ORIENTATION = {'coronal': "COR", 'axial': "AXI", 'sagital': "SAG"}
-
-
-def iou(pr, gt, eps=1e-7, threshold=None, activation='sigmoid'):
-    """
-    Source:
-        https://github.com/catalyst-team/catalyst/
-    Args:
-        pr (torch.Tensor): A list of predicted elements
-        gt (torch.Tensor):  A list of elements that are to be predicted
-        eps (float): epsilon to avoid zero division
-        threshold: threshold for outputs binarization
-    Returns:
-        float: IoU (Jaccard) score
-    """
-
-    if activation is None or activation == "none":
-        activation_fn = lambda x: x
-    elif activation == "sigmoid":
-        activation_fn = torch.nn.Sigmoid()
-    elif activation == "softmax2d":
-        activation_fn = torch.nn.Softmax2d()
-    else:
-        raise NotImplementedError(
-            "Activation implemented for sigmoid and softmax2d"
-        )
-
-    pr = activation_fn(pr)
-
-    if threshold is not None:
-        pr = (pr > threshold).float()
-
-    intersection = torch.sum(gt * pr)
-    union = torch.sum(gt) + torch.sum(pr) - intersection + eps
-    return (intersection + eps) / union
-
-jaccard = iou
-
-
-def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, activation='sigmoid'):
-    """
-    Args:
-        pr (torch.Tensor): A list of predicted elements
-        gt (torch.Tensor):  A list of elements that are to be predicted
-        beta (float): positive constant
-        eps (float): epsilon to avoid zero division
-        threshold: threshold for outputs binarization
-    Returns:
-        float: F score
-    """
-
-    if activation is None or activation == "none":
-        activation_fn = lambda x: x
-    elif activation == "sigmoid":
-        activation_fn = torch.nn.Sigmoid()
-    elif activation == "softmax2d":
-        activation_fn = torch.nn.Softmax2d()
-    else:
-        raise NotImplementedError(
-            "Activation implemented for sigmoid and softmax2d"
-        )
-
-    pr = activation_fn(pr)
-
-    if threshold is not None:
-        pr = (pr > threshold).float()
-
-
-    tp = torch.sum(gt * pr)
-    fp = torch.sum(pr) - tp
-    fn = torch.sum(gt) - tp
-
-    score = ((1 + beta ** 2) * tp + eps) \
-            / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + eps)
-
-    return score
-
-#################################################
-#### Useful functions ###########################
-#################################################
+ORIENTATION = {"coronal": "COR", "axial": "AXI", "sagital": "SAG"}
 
 
 def combine_masks(image, mask):
@@ -108,7 +28,12 @@ def get_train_augmentation(hw_len=512):
         A.HorizontalFlip(p=0.5),
         A.Rotate(limit=10, p=0.5),
         A.RandomScale(p=0.5),
-        A.PadIfNeeded(min_height=hw_len, min_width=hw_len, always_apply=True, border_mode=cv2.BORDER_CONSTANT),
+        A.PadIfNeeded(
+            min_height=hw_len,
+            min_width=hw_len,
+            always_apply=True,
+            border_mode=cv2.BORDER_CONSTANT,
+        ),
         A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
     ]
     return A.Compose(transform)
@@ -116,14 +41,19 @@ def get_train_augmentation(hw_len=512):
 
 def get_test_augmentation(hw_len=512):
     transform = [
-        A.PadIfNeeded(min_height=hw_len, min_width=hw_len, always_apply=True, border_mode=cv2.BORDER_CONSTANT),
+        A.PadIfNeeded(
+            min_height=hw_len,
+            min_width=hw_len,
+            always_apply=True,
+            border_mode=cv2.BORDER_CONSTANT,
+        ),
         A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
     ]
     return A.Compose(transform)
 
 
 def to_tensor(x, **kwargs):
-    return x.transpose(2, 0, 1).astype('float32')
+    return x.transpose(2, 0, 1).astype("float32")
 
 
 def get_preprocessing(preprocessing_fn=None):
@@ -153,18 +83,18 @@ def visualize(**images):
         plt.subplot(1, n, idx + 1)
         plt.xticks([])
         plt.yticks([])
-        plt.title(' '.join(name.split('_')).title())
+        plt.title(" ".join(name.split("_")).title())
         plt.imshow(image)
     plt.show()
 
 
-def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION['coronal']):
+def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION["coronal"]):
     """Return rotated matrix to get differnt views ralative to submited 3D volumes"""
-    if orientation == ORIENTATION['coronal']:
+    if orientation == ORIENTATION["coronal"]:
         return volume_data.transpose((2, 0, 1)), volume_label.transpose((2, 0, 1))
-    elif orientation == ORIENTATION['axial']:
+    elif orientation == ORIENTATION["axial"]:
         return volume_data.transpose((1, 2, 0)), volume_label.transpose((1, 2, 0))
-    elif orientation == ORIENTATION['sagital']:
+    elif orientation == ORIENTATION["sagital"]:
         return volume_data, volume_label
     else:
         raise ValueError("Invalid value for orientation. Pleas see help")
@@ -176,7 +106,7 @@ def remove_black(data, labels, only_with_target=False):
         unique, counts = np.unique(frame, return_counts=True)
         # if only_with_target and len(unique) == 1:
         #    continue
-        if counts[0] / sum(counts) < .99:
+        if counts[0] / sum(counts) < 0.99:
             clean_labels.append(frame)
             clean_data.append(data[i])
     return np.array(clean_data), np.array(clean_labels)
@@ -192,11 +122,11 @@ def normilize_mean_std(volume):
 
 
 def remove_all_blacks(image, mask, only_with_target=False):
-    image, mask = rotate_orientation(image, mask, orientation=ORIENTATION['coronal'])
+    image, mask = rotate_orientation(image, mask, orientation=ORIENTATION["coronal"])
     image, mask = remove_black(image, mask, only_with_target)
-    image, mask = rotate_orientation(image, mask, orientation=ORIENTATION['axial'])
+    image, mask = rotate_orientation(image, mask, orientation=ORIENTATION["axial"])
     image, mask = remove_black(image, mask, only_with_target)
-    image, mask = rotate_orientation(image, mask, orientation=ORIENTATION['sagital'])
+    image, mask = rotate_orientation(image, mask, orientation=ORIENTATION["sagital"])
     image, mask = remove_black(image, mask, only_with_target)
     return image, mask
 
@@ -246,7 +176,9 @@ def read_slices(images, masks):
     return _images, _masks
 
 
-def load_image_and_mask(slice_index, single_dimension, use_dimension, image_volumes, mask_volumes):
+def load_image_and_mask(
+    slice_index, single_dimension, use_dimension, image_volumes, mask_volumes
+):
     """ Extracts volume slice with index `slice_index`
 
     Volumes must be in corresponding order with masks.
@@ -262,7 +194,7 @@ def load_image_and_mask(slice_index, single_dimension, use_dimension, image_volu
     image, mask = None, None
     for _image, _mask in zip(image_volumes, mask_volumes):
         if single_dimension:  # <-------------------------------- single dimension
-            if use_dimension == 'use_dimension_0':
+            if use_dimension == "use_dimension_0":
                 img_shape = _image.shape[0]
                 if slice_index >= img_shape:
                     slice_index -= img_shape
@@ -273,7 +205,7 @@ def load_image_and_mask(slice_index, single_dimension, use_dimension, image_volu
                     image = _image[slice_index, :, :]
                     mask = _mask[slice_index, :, :]
                     break
-            elif use_dimension == 'use_dimension_1':
+            elif use_dimension == "use_dimension_1":
                 img_shape = _image.shape[1]
                 if slice_index >= img_shape:
                     slice_index -= img_shape
@@ -284,7 +216,7 @@ def load_image_and_mask(slice_index, single_dimension, use_dimension, image_volu
                     image = _image[:, slice_index, :]
                     mask = _mask[:, slice_index, :]
                     break
-            elif use_dimension == 'use_dimension_2':
+            elif use_dimension == "use_dimension_2":
                 img_shape = _image.shape[2]
                 if slice_index >= img_shape:
                     slice_index -= img_shape
@@ -324,13 +256,15 @@ def load_image_and_mask(slice_index, single_dimension, use_dimension, image_volu
     return image, mask
 
 
-def save_slice_as_tiff_image(npy_orig, convert_format, output_dir: str, new_title: str, sanity_check=False):
+def save_slice_as_tiff_image(
+    npy_orig, convert_format, output_dir: str, new_title: str, sanity_check=False
+):
     """Export numpy array to TIFF image.
 
     npy_orig:       numpy array containing image
     convert_format: must be 'F' for grayscale, 'L' for int values
     """
-    assert new_title.endswith('.tiff')
+    assert new_title.endswith(".tiff")
 
     out_fname = output_dir + new_title
     new_img = Image.fromarray(npy_orig)
@@ -342,26 +276,22 @@ def save_slice_as_tiff_image(npy_orig, convert_format, output_dir: str, new_titl
     if sanity_check:
         new_img = read_pil_image(out_fname)
         print(out_fname)
-        print(np.sum(npy_orig), '<sum>', np.sum(new_img))
-        print(np.unique(npy_orig), '<np.unique>', np.unique(new_img))
-        print(np.max(npy_orig), '<max>', np.max(npy_orig))
-        print(np.min(new_img), '<min>', np.min(new_img))
-        print(type(npy_orig), '<type>', type(new_img))
-        print(npy_orig.dtype, '<dtype>', new_img.dtype)
-        print(npy_orig.shape, '<shape>', new_img.shape)
+        print(np.sum(npy_orig), "<sum>", np.sum(new_img))
+        print(np.unique(npy_orig), "<np.unique>", np.unique(new_img))
+        print(np.max(npy_orig), "<max>", np.max(npy_orig))
+        print(np.min(new_img), "<min>", np.min(new_img))
+        print(type(npy_orig), "<type>", type(new_img))
+        print(npy_orig.dtype, "<dtype>", new_img.dtype)
+        print(npy_orig.shape, "<shape>", new_img.shape)
         print(npy_orig)
         print(new_img)
-        print('\n')
+        print("\n")
 
     return npy_orig, new_img, out_fname
 
 
 def extract_slices_from_volumes(
-        images,
-        masks,
-        output_dir,
-        skip_empty_mask=True,
-        use_dimensions='012',
+    images, masks, output_dir, skip_empty_mask=True, use_dimensions="012",
 ):
     """ Export volumes slices as separate TIFF images
 
@@ -381,23 +311,23 @@ def extract_slices_from_volumes(
     extract_slices_from_volumes(TRAIN, TRAIN_MASKS, output_dir=EXPORTED_SLICES_DIR)
     """
     if os.path.isdir(output_dir):
-        print('rmtree before extracting slices:', output_dir)
+        print("rmtree before extracting slices:", output_dir)
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
 
     image_volumes, mask_volumes = read_slices(images, masks)
     volume_shapes = [i.shape for i in image_volumes]
-    print('volumes shapes', volume_shapes)
+    print("volumes shapes", volume_shapes)
 
     # Export slices from dimension 0
     slices_cnt_dim_0 = sum([x for x, y, z in volume_shapes])
     with_masks_dim_0 = slices_cnt_dim_0
-    if '0' in use_dimensions:
+    if "0" in use_dimensions:
         for idx in range(0, slices_cnt_dim_0):
             npy_image, npy_mask = load_image_and_mask(
                 idx,
                 single_dimension=True,
-                use_dimension='use_dimension_0',
+                use_dimension="use_dimension_0",
                 image_volumes=image_volumes,
                 mask_volumes=mask_volumes,
             )
@@ -405,23 +335,27 @@ def extract_slices_from_volumes(
                 with_masks_dim_0 -= 1
                 continue
             base_fn = str(idx).zfill(7)
-            image_fn = base_fn + '.tiff'
-            mask_fn =  base_fn + '_seg.tiff'
-            save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
-            save_slice_as_tiff_image(npy_mask, convert_format='L', output_dir=output_dir, new_title=mask_fn)
-        print('exported slices dim 0:', slices_cnt_dim_0)
-        print('      with mask dim 0:', with_masks_dim_0)
+            image_fn = base_fn + ".tiff"
+            mask_fn = base_fn + "_seg.tiff"
+            save_slice_as_tiff_image(
+                npy_image, convert_format="F", output_dir=output_dir, new_title=image_fn
+            )
+            save_slice_as_tiff_image(
+                npy_mask, convert_format="L", output_dir=output_dir, new_title=mask_fn
+            )
+        print("exported slices dim 0:", slices_cnt_dim_0)
+        print("      with mask dim 0:", with_masks_dim_0)
 
     # Export slices from dimension 1
     start_idx = slices_cnt_dim_0
     slices_cnt_dim_1 = sum([y for x, y, z in volume_shapes])
     with_masks_dim_1 = slices_cnt_dim_1
-    if '1' in use_dimensions:
+    if "1" in use_dimensions:
         for idx in range(0, slices_cnt_dim_1):
             npy_image, npy_mask = load_image_and_mask(
                 idx,
                 single_dimension=True,
-                use_dimension='use_dimension_1',
+                use_dimension="use_dimension_1",
                 image_volumes=image_volumes,
                 mask_volumes=mask_volumes,
             )
@@ -429,23 +363,27 @@ def extract_slices_from_volumes(
                 with_masks_dim_1 -= 1
                 continue
             base_fn = str(idx + start_idx).zfill(7)
-            image_fn = base_fn + '.tiff'
-            mask_fn = base_fn + '_seg.tiff'
-            save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
-            save_slice_as_tiff_image(npy_mask, convert_format='L', output_dir=output_dir, new_title=mask_fn)
-        print('exported slices dim 1:', slices_cnt_dim_1)
-        print('      with mask dim 1:', with_masks_dim_1)
+            image_fn = base_fn + ".tiff"
+            mask_fn = base_fn + "_seg.tiff"
+            save_slice_as_tiff_image(
+                npy_image, convert_format="F", output_dir=output_dir, new_title=image_fn
+            )
+            save_slice_as_tiff_image(
+                npy_mask, convert_format="L", output_dir=output_dir, new_title=mask_fn
+            )
+        print("exported slices dim 1:", slices_cnt_dim_1)
+        print("      with mask dim 1:", with_masks_dim_1)
 
     # Export slices from dimension 2
     start_idx = slices_cnt_dim_0 + slices_cnt_dim_1
     slices_cnt_dim_2 = sum([z for x, y, z in volume_shapes])
     with_masks_dim_2 = slices_cnt_dim_2
-    if '2' in use_dimensions:
+    if "2" in use_dimensions:
         for idx in range(0, slices_cnt_dim_2):
             npy_image, npy_mask = load_image_and_mask(
                 idx,
                 single_dimension=True,
-                use_dimension='use_dimension_2',
+                use_dimension="use_dimension_2",
                 image_volumes=image_volumes,
                 mask_volumes=mask_volumes,
             )
@@ -453,10 +391,14 @@ def extract_slices_from_volumes(
                 with_masks_dim_2 -= 1
                 continue
             base_fn = str(idx + start_idx).zfill(7)
-            image_fn = base_fn + '.tiff'
-            mask_fn = base_fn + '_seg.tiff'
-            save_slice_as_tiff_image(npy_image, convert_format='F', output_dir=output_dir, new_title=image_fn)
-            save_slice_as_tiff_image(npy_mask, convert_format='L', output_dir=output_dir, new_title=mask_fn)
-        print('exported slices dim 2:', slices_cnt_dim_2)
-        print('      with mask dim 2:', with_masks_dim_2)
+            image_fn = base_fn + ".tiff"
+            mask_fn = base_fn + "_seg.tiff"
+            save_slice_as_tiff_image(
+                npy_image, convert_format="F", output_dir=output_dir, new_title=image_fn
+            )
+            save_slice_as_tiff_image(
+                npy_mask, convert_format="L", output_dir=output_dir, new_title=mask_fn
+            )
+        print("exported slices dim 2:", slices_cnt_dim_2)
+        print("      with mask dim 2:", with_masks_dim_2)
     return True

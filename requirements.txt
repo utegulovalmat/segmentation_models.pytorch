@@ -5,4 +5,4 @@ efficientnet-pytorch==0.4.0
 pynrrd
 albumentations
 matplotlib
-
+pre-commit

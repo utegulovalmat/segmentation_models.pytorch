@@ -10,6 +10,15 @@ from PIL import Image
 ORIENTATION = {"coronal": "COR", "axial": "AXI", "sagital": "SAG"}
 
 
+def zscore_normalize_volume(image):
+    """
+    https://github.com/jcreinhold/intensity-normalization
+    """
+    # import intensity_normalization as inorm
+    # return inorm.normalize.zscore.zscore_normalize(image, mask=None)
+    pass
+
+
 def combine_masks(image, mask):
     """
     Overlay mask layers into single mask

@@ -14,9 +14,7 @@ from torchvision import datasets, transforms
 class FCN(nn.Module):
     def __init__(self):
         super(FCN, self).__init__()
-        # Defining the layers, 128, 64, 10 units each
-        self.fc1 = nn.Linear(784, 128)
-        self.fc2 = nn.Linear(128, 64)
+        self.fc1 = nn.Linear(784, 64)
         # Output layer, 10 units - one for each digit
         self.fc3 = nn.Linear(64, 10)
 
@@ -24,11 +22,26 @@ class FCN(nn.Module):
         """ Forward pass through the network, returns the output logits """
         x = self.fc1(x)
         x = F.relu(x)
-        x = self.fc2(x)
-        x = F.relu(x)
         x = self.fc3(x)
-        x = F.softmax(x, dim=1)
+        x = F.log_softmax(x, dim=1)
         return x
+
+
+def sequential_model():
+    # Hyperparameters for our network
+    input_size = 784
+    hidden_sizes = [128, 64]
+    output_size = 10
+    # Build a feed-forward network
+    model = nn.Sequential(
+        nn.Linear(input_size, hidden_sizes[0]),
+        nn.ReLU(),
+        nn.Linear(hidden_sizes[0], hidden_sizes[1]),
+        nn.ReLU(),
+        nn.Linear(hidden_sizes[1], output_size),
+        nn.LogSoftmax(dim=1),
+    )
+    return model
 
 
 def dice_loss(pred, target, smooth=1.0):
@@ -56,7 +69,6 @@ def print_metrics(metrics, epoch_samples, phase):
     outputs = []
     for k in metrics.keys():
         outputs.append("{}: {:4f}".format(k, metrics[k] / epoch_samples))
-
     print("{}: {}".format(phase, ", ".join(outputs)))
 
 
@@ -64,7 +76,6 @@ def view_classify(img, ps, version="MNIST"):
     """ Function for viewing an image and it's predicted classes.
     """
     ps = ps.data.numpy().squeeze()
-
     fig, (ax1, ax2) = plt.subplots(figsize=(6, 9), ncols=2)
     ax1.imshow(img.resize_(1, 28, 28).numpy().squeeze())
     ax1.axis("off")
@@ -73,25 +84,8 @@ def view_classify(img, ps, version="MNIST"):
     ax2.set_yticks(np.arange(10))
     if version == "MNIST":
         ax2.set_yticklabels(np.arange(10))
-    elif version == "Fashion":
-        ax2.set_yticklabels(
-            [
-                "T-shirt/top",
-                "Trouser",
-                "Pullover",
-                "Dress",
-                "Coat",
-                "Sandal",
-                "Shirt",
-                "Sneaker",
-                "Bag",
-                "Ankle Boot",
-            ],
-            size="small",
-        )
     ax2.set_title("Class Probability")
     ax2.set_xlim(0, 1.1)
-
     plt.tight_layout()
     plt.show()
 
@@ -102,23 +96,6 @@ def num_flat_features(x):
     for s in size:
         num_features *= s
     return num_features
-
-
-def sequential_model():
-    # Hyperparameters for our network
-    input_size = 784
-    hidden_sizes = [128, 64]
-    output_size = 10
-    # Build a feed-forward network
-    model = nn.Sequential(
-        nn.Linear(input_size, hidden_sizes[0]),
-        nn.ReLU(),
-        nn.Linear(hidden_sizes[0], hidden_sizes[1]),
-        nn.ReLU(),
-        nn.Linear(hidden_sizes[1], output_size),
-        nn.Softmax(dim=1),
-    )
-    return model
 
 
 def main():
@@ -164,6 +141,7 @@ def main():
     img_idx = 0
     ps = best_model.forward(images[img_idx, :])
     print(ps)  # softmax output probabilities
+    ps = torch.exp(ps)  # back to percents
     view_classify(images[0].view(1, 28, 28), ps)
 
 
@@ -201,7 +179,7 @@ def train(model, optimizer, num_epochs, train_loader, valid_loader):
             epoch_samples = 0
 
             for inputs, labels in dataloaders[phase]:
-                inputs = inputs.view(inputs.shape[0], -1)
+                inputs = inputs.view(inputs.shape[0], -1)  # TODO: remove for conv
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -211,8 +189,8 @@ def train(model, optimizer, num_epochs, train_loader, valid_loader):
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == "train"):
-                    outputs = model(inputs)
-                    loss = calc_loss(outputs, labels, metrics)
+                    logps = model(inputs)
+                    loss = calc_loss(logps, labels, metrics)
 
                     # backward + optimize only if in training phase
                     if phase == "train":

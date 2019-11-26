@@ -48,7 +48,7 @@ def main():
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4
     )
-    best_model = train_model(model, criterion, optimizer, num_epochs=3)
+    best_model = train_model(model, criterion, optimizer, num_epochs=1)
 
     # optimizer = optim.Adam(
     #     filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4
@@ -163,7 +163,7 @@ def train_model(model, criterion, optimizer, num_epochs=1):
             running_loss = 0.0
 
             # Iterate over data.
-            batch_size = 10
+            batch_size = 5
             epoch_steps = 10
             for i in range(epoch_steps):
                 input_images, target_masks = generate_random_data(

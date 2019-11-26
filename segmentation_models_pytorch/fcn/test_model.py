@@ -24,7 +24,7 @@ from .simulation import generate_random_data
 
 def main():
     # Generate some random images
-    input_images, target_masks = generate_random_data(192, 192, count=3)
+    input_images, target_masks = generate_random_data(192, 192, count=1)
     for x in [input_images, target_masks]:
         print(x.shape)
         print(x.min(), x.max())
@@ -39,7 +39,7 @@ def main():
 
     # Init model
     device = torch.device("cpu")
-    model = FCN().to(device)
+    model = FCN(classes=6).to(device)
     # print(model.fc1)
 
     # Train model
@@ -65,12 +65,25 @@ def main():
 
     # View prediction
     images, labels = input_images, target_masks
-    img_idx = 0
-    preds = best_model.forward(images[img_idx, :])
+    images, labels = torch.from_numpy(images).float(), torch.from_numpy(labels).float()
+    # preds = best_model.forward(images).detach().numpy()
+    preds = best_model.predict(images).detach().numpy()
+    images = images.numpy()
+
+    print("PREDS SHAPE", type(preds), preds.shape)
+    # preds = preds[0, :]
+    # import matplotlib.pyplot as plt
+    # plt.imshow(preds[0])
+    # plt.show()
+
+    # Change channel-order and make 3 channels for matplot
+    input_images_rgb = [
+        (x.swapaxes(0, 2).swapaxes(0, 1)).astype(np.uint8) for x in images
+    ]
     # Map each channel (i.e. class) to each color
     target_masks_rgb = [masks_to_colorimg(x) for x in preds]
-    # Left: Input image, Right: Target mask
-    plot_side_by_side([images, target_masks_rgb])
+    # # Left: Input image, Right: Target mask
+    plot_side_by_side([input_images_rgb, target_masks_rgb])
 
 
 # def train(model, optimizer, criterion, num_epochs):
@@ -143,7 +156,7 @@ def main():
 #     return model
 
 
-def train_model(model, criterion, optimizer, num_epochs=1):
+def train_model(model, criterion, optimizer, num_epochs=25):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -163,7 +176,7 @@ def train_model(model, criterion, optimizer, num_epochs=1):
             running_loss = 0.0
 
             # Iterate over data.
-            batch_size = 5
+            batch_size = 2
             epoch_steps = 10
             for i in range(epoch_steps):
                 input_images, target_masks = generate_random_data(

@@ -50,3 +50,18 @@ class FCN(nn.Module):
         out = self.sigmoid(merge)
 
         return out
+
+    def predict(self, x):
+        """Inference method. Switch model to `eval` mode, call `.forward(x)` with `torch.no_grad()`
+
+        Args:
+            x: 4D torch tensor with shape (batch_size, channels, height, width)
+
+        Return:
+            prediction: 4D torch tensor with shape (batch_size, classes, height, width)
+
+        """
+        self.eval()
+        with torch.no_grad():
+            x = self.forward(x)
+        return x

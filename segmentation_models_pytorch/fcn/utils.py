@@ -122,6 +122,7 @@ def masks_to_colorimg(masks):
             (160, 194, 56),
         ]
     )
+    print("masks.shape", masks.shape)
 
     colorimg = np.ones((masks.shape[1], masks.shape[2], 3), dtype=np.float32) * 255
     channels, height, width = masks.shape

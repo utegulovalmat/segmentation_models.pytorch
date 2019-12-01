@@ -179,7 +179,7 @@ def train_model(model, criterion, optimizer, num_epochs=25):
 
             # Iterate over data.
             batch_size = 2
-            epoch_steps = 10
+            epoch_steps = 2
             for i in range(epoch_steps):
                 input_images, target_masks = generate_random_data(
                     192, 192, count=batch_size

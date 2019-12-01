@@ -83,6 +83,8 @@ def main():
     # Map each channel (i.e. class) to each color
     target_masks_rgb = [masks_to_colorimg(x) for x in preds]
     # # Left: Input image, Right: Target mask
+    print(len(input_images_rgb), input_images_rgb[0].shape)
+    print(len(target_masks_rgb), target_masks_rgb[0].shape)
     plot_side_by_side([input_images_rgb, target_masks_rgb])
 
 

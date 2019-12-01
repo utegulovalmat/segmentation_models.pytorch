@@ -6,3 +6,4 @@ from .fcn import FCN
 
 from . import encoders
 from . import utils
+from .__version__ import __version__

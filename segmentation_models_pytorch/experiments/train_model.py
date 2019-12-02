@@ -4,9 +4,11 @@ warnings.filterwarnings("ignore")
 
 import torch
 import segmentation_models_pytorch as smp
-import segmentation_models_pytorch.utils.custom_functions.get_train_augmentation as get_train_augmentation
-import segmentation_models_pytorch.utils.custom_functions.get_test_augmentation as get_test_augmentation
-import segmentation_models_pytorch.utils.custom_functions.get_preprocessing as get_preprocessing
+from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
+from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
+from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
+from segmentation_models_pytorch.utils.data import MriDataset
+
 import numpy as np
 import argparse
 import logging
@@ -17,8 +19,13 @@ import matplotlib.pyplot as plt
 plt.rcParams["figure.figsize"] = (7, 7)
 
 from torch.utils.data import DataLoader
+import traceback
 
 logger = None
+
+
+class NoMatchingModelException(Exception):
+    pass
 
 
 def new_print(*args):
@@ -58,6 +65,8 @@ def train_model(
     output_dir: str,
     train_all: bool,
     axis: str = "012",
+    extract_slices: bool = True,
+    epochs: int = 1,
 ):
     """Script to train networks on MRI dataset
 
@@ -67,6 +76,7 @@ def train_model(
     :param output_dir: output folder for model predictions
     :param axis: which axis should be used for training [0|1|2]
     :param train_all: False means use 1 volume for training
+    :param extract_slices: True - extract slices from volumes
     :return:
     """
     global logger
@@ -91,50 +101,52 @@ def train_model(
     exported_slices_dir_train = dataset_dir + "/tif_slices_train/"
     exported_slices_dir_valid = dataset_dir + "/tif_slices_valid/"
     exported_slices_dir_test = dataset_dir + "/tif_slices_test/"
-    smp.utils.custom_functions.extract_slices_from_volumes(
-        images=train_volumes,
-        masks=train_masks,
-        output_dir=exported_slices_dir_train,
-        skip_empty_mask=True,
-        use_dimensions=use_axis,
-    )
-    smp.utils.custom_functions.extract_slices_from_volumes(
-        images=valid_volumes,
-        masks=valid_masks,
-        output_dir=exported_slices_dir_valid,
-        skip_empty_mask=True,
-        use_dimensions=use_axis,
-    )
-    smp.utils.custom_functions.extract_slices_from_volumes(
-        images=test_volumes,
-        masks=test_masks,
-        output_dir=exported_slices_dir_test,
-        skip_empty_mask=True,
-        use_dimensions=use_axis,
-    )
+    print("Extract slices:", extract_slices)
+    if extract_slices:
+        smp.utils.custom_functions.extract_slices_from_volumes(
+            images=train_volumes,
+            masks=train_masks,
+            output_dir=exported_slices_dir_train,
+            skip_empty_mask=True,
+            use_dimensions=use_axis,
+        )
+        smp.utils.custom_functions.extract_slices_from_volumes(
+            images=valid_volumes,
+            masks=valid_masks,
+            output_dir=exported_slices_dir_valid,
+            skip_empty_mask=True,
+            use_dimensions=use_axis,
+        )
+        smp.utils.custom_functions.extract_slices_from_volumes(
+            images=test_volumes,
+            masks=test_masks,
+            output_dir=exported_slices_dir_test,
+            skip_empty_mask=True,
+            use_dimensions=use_axis,
+        )
 
-    MriDataset = smp.utils.data.MriDataset
+    # Define datasets
     train_dataset = MriDataset(
-        mode="train",
+        path=exported_slices_dir_train,
         augmentation=get_train_augmentation(),
         preprocessing=get_preprocessing(),
     )
     print(len(train_dataset))
     valid_dataset = MriDataset(
-        mode="valid",
+        path=exported_slices_dir_valid,
         augmentation=get_test_augmentation(),
         preprocessing=get_preprocessing(),
     )
     print(len(valid_dataset))
     test_dataset = MriDataset(
-        mode="test",
+        path=exported_slices_dir_test,
         augmentation=get_test_augmentation(),
         preprocessing=get_preprocessing(),
     )
     print(len(test_dataset))
 
-    # %% [code]
     image, mask = train_dataset[150]
+    print("Image and mask dimensions")
     print(type(image), image.shape, mask.shape)
 
     # %% [code]
@@ -145,31 +157,34 @@ def train_model(
     plt.imshow(image[0])
     fig.add_subplot(rows, columns, 2)
     plt.imshow(mask[0])
-    plt.show()
+    # plt.show()
+    plt.savefig(fname=output_dir + "/input_sample.png")
 
-    # %% [markdown]
-    # # Model
-
-    # %% [code]
-    ENCODER = "resnet34"  # 'se_resnext50_32x4d'
-    ENCODER_WEIGHTS = "imagenet"
-    CLASSES = ["1"]
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    ACTIVATION = "sigmoid"
+    classes = ["1"]
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info("Use device: " + device)
+    activation = "sigmoid" if len(classes) == 1 else "softmax"
+    logger.info("Activation: " + activation)
 
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=12)
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
 
-    # %% [code]
     # create segmentation model with pretrained encoder
-    model = smp.Unet(
-        encoder_name=ENCODER,
-        encoder_weights=ENCODER_WEIGHTS,
-        classes=len(CLASSES),
-        activation=ACTIVATION,
-        #     encoder_depth=4,
-    )
-    preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
+    if model_name == "unet":
+        encoder_weights = "imagenet"
+        model = smp.Unet(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "fcn":
+        model = smp.FCN(classes=len(classes),)
+    elif model_name == "fpn":
+        model = smp.FPN("resnet34", in_channels=1)
+    else:
+        raise NoMatchingModelException
 
     # %% [code]
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
@@ -195,15 +210,15 @@ def train_model(
         loss=loss,
         metrics=metrics,
         optimizer=optimizer,
-        device=DEVICE,
+        device=device,
         verbose=True,
     )
     valid_epoch = smp.utils.train.ValidEpoch(
-        model, loss=loss, metrics=metrics, device=DEVICE, verbose=True,
+        model, loss=loss, metrics=metrics, device=device, verbose=True,
     )
+    return
 
     # %% [code]
-    epochs = 70
     max_score = 0
     train_history = []
     valid_history = []
@@ -301,7 +316,7 @@ def train_model(
     # %% [code]
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4)
     test_epoch = smp.utils.train.ValidEpoch(
-        best_model, loss=loss, metrics=metrics, device=DEVICE, verbose=True,
+        best_model, loss=loss, metrics=metrics, device=device, verbose=True,
     )
     logs = test_epoch.run(test_loader)
 
@@ -318,7 +333,7 @@ def train_model(
 
         gt_mask = gt_mask.squeeze()
 
-        x_tensor = torch.from_numpy(image).to(DEVICE).unsqueeze(0)
+        x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor)
         pr_mask = pr_mask.squeeze().cpu().numpy().round()
 
@@ -363,23 +378,53 @@ def arg_parser():
         default="012",
         help="axis of the 3d image array on which to sample the slices",
     )
+    parser.add_argument(
+        "--extract_slices",
+        type=int,
+        default=1,
+        help="1 - extract slices, 0 - skip this step",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=1, help="number of epochs",
+    )
     return parser
+
+
+def get_datetime_str():
+    from datetime import datetime
+
+    now = datetime.now()  # current date and time
+    date = now.strftime("%Y%m%d")
+    time = now.strftime("%H:%M:%S")
+    return date + "-" + time
 
 
 def main():
     """
     source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /home/segnet/dataset -a 012
+    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /home/segnet/dataset -a 012 -ex 0
     """
     global logger
 
     args = arg_parser().parse_args()
+
+    base_path = "segmentation_models_pytorch/experiments/"
+    cur_datetime = get_datetime_str()
+    output_dir = (
+        base_path
+        + args.model_name
+        + "-"
+        + args.encoder
+        + "-"
+        + args.axis
+        + "-"
+        + cur_datetime
+    )
+    os.mkdir(output_dir)
+
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
-    base_path = "segmentation_models_pytorch/experiments/"
-    log_filename = (
-        base_path + args.model_name + "-" + args.encoder + "-" + args.axis + ".log"
-    )
+    log_filename = output_dir + "/train.log"
     fh = logging.FileHandler(log_filename)
     fh.setLevel(logging.DEBUG)
     ch = logging.StreamHandler()
@@ -392,7 +437,6 @@ def main():
     logger.addHandler(fh)
     logger.addHandler(ch)
 
-    output_dir = base_path + args.model_name + "-" + args.encoder + "-" + args.axis
     try:
         logger.info("Start")
         train_model(
@@ -402,12 +446,15 @@ def main():
             output_dir=output_dir,
             train_all=args.train_all == "all",
             axis=args.axis,
+            extract_slices=args.extract_slices == 1,
+            epochs=args.epochs,
         )
         logger.info("Finish")
         return 0
     except Exception as e:
         logger.error("Exception")
         logger.error(str(e))
+        logger.error(traceback.format_exc())
         return 1
 
 

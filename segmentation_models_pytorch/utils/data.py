@@ -1,15 +1,10 @@
-from torch.utils.data import DataLoader
+import os
+
+import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 
-import os
-import numpy as np
-from .custom_functions import read_pil_image
 from .custom_functions import normalize_0_1
-
-
-EXPORTED_SLICES_DIR_TRAIN = "./export_slices_train/"
-EXPORTED_SLICES_DIR_VALID = "./export_slices_valid/"
-EXPORTED_SLICES_DIR_TEST = "./export_slices_test/"
+from .custom_functions import read_pil_image
 
 
 class MriDataset(BaseDataset):
@@ -20,32 +15,24 @@ class MriDataset(BaseDataset):
     get_training_augmentation = smp.utils.functions.get_training_augmentation
     get_test_augmentation = smp.utils.functions.get_test_augmentation
 
-    train_dataset = MriDataset(mode='train', augmentation=get_training_augmentation(), preprocessing=None)
+    train_dataset = MriDataset(path='...', augmentation=get_training_augmentation(), preprocessing=None)
     print(len(train_dataset))
 
-    valid_dataset = MriDataset(mode='valid', augmentation=get_training_augmentation(), preprocessing=None)
+    valid_dataset = MriDataset(path='...', augmentation=get_training_augmentation(), preprocessing=None)
     print(len(valid_dataset))
 
-    test_dataset = MriDataset(mode='test', augmentation=get_test_augmentation(), preprocessing=None)
+    test_dataset = MriDataset(path='...', augmentation=get_test_augmentation(), preprocessing=None)
     print(len(test_dataset))
     """
 
     CLASSES = ["1"]
 
     def __init__(
-        self, mode, augmentation=None, preprocessing=None,
+        self, path, augmentation=None, preprocessing=None,
     ):
         self.augmentation = augmentation
         self.preprocessing = preprocessing
-        self.mode = mode  # train valid test
-        if self.mode == "train":
-            self.exported_slices_dir = EXPORTED_SLICES_DIR_TRAIN
-        elif self.mode == "valid":
-            self.exported_slices_dir = EXPORTED_SLICES_DIR_VALID
-        elif self.mode == "test":
-            self.exported_slices_dir = EXPORTED_SLICES_DIR_TEST
-        else:
-            raise
+        self.exported_slices_dir = path
 
         all_fns = sorted(os.listdir(self.exported_slices_dir))
         self.image_fns = [fn for fn in all_fns if "seg" not in fn]
@@ -56,8 +43,7 @@ class MriDataset(BaseDataset):
 
     def __getitem__(self, image_id):
         image = self.load_image(image_id)
-        image = np.dstack([image, image, image])
-
+        image = np.expand_dims(image, axis=-1)  # add unit dimension
         mask = self.load_mask(image_id)
         mask = np.expand_dims(mask, axis=-1)  # add unit dimension
 

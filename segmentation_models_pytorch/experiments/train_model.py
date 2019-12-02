@@ -1,61 +1,34 @@
-import warnings
-
-warnings.filterwarnings("ignore")
-
-import torch
+import traceback
 import segmentation_models_pytorch as smp
 from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
 from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
 from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
 from segmentation_models_pytorch.utils.data import MriDataset
 
-import numpy as np
+import torch
+from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data import DataLoader
 import argparse
 import logging
 import sys
 import os
 import matplotlib.pyplot as plt
+import warnings
+
+from .helpers import new_print
+from .helpers import get_volume_fn_from_mask_fn
+from .helpers import NoMatchingModelException
+from .helpers import save_sample_image
+from .helpers import get_volume_paths
+from .helpers import format_history
+from .helpers import plot_graphs
+from .helpers import get_best_metrics
+from .helpers import get_datetime_str
 
 plt.rcParams["figure.figsize"] = (7, 7)
-
-from torch.utils.data import DataLoader
-import traceback
+warnings.filterwarnings("ignore")
 
 logger = None
-
-
-class NoMatchingModelException(Exception):
-    pass
-
-
-def new_print(*args):
-    global logger
-    return logger.info(" ".join(str(a) for a in args))
-
-
-def get_fns(input_dir: str):
-    """Get paths to volumes
-
-    :param input_dir: directory with MRI volumes
-    :return: sorted list of paths to masks and volume images
-    """
-    fns = []
-    mask_fns = []
-    for dirname, _, filenames in os.walk(input_dir):
-        for filename in filenames:
-            if "nrrd" in filename and "seg" not in filename:
-                if "label.nrrd" in filename:
-                    mask_fns.append(os.path.join(dirname, filename))
-                else:
-                    fns.append(os.path.join(dirname, filename))
-    mask_fns = sorted(mask_fns)
-    fns = sorted(fns)
-    return mask_fns, fns
-
-
-def get_fn(mask_filename):
-    """Extract volume path from mask path"""
-    return mask_filename.replace("S-label", "")
 
 
 def train_model(
@@ -70,13 +43,14 @@ def train_model(
 ):
     """Script to train networks on MRI dataset
 
-    :param model_name: unet/pspnet/fpn/linknet
+    :param model_name: one of unet/pspnet/fpn/linknet/fcn
     :param encoder: see encoders list at https://github.com/utegulovalmat/segmentation_models.pytorch
     :param input_dir: path to folder with volumes and masks
     :param output_dir: output folder for model predictions
     :param axis: which axis should be used for training [0|1|2]
     :param train_all: False means use 1 volume for training
     :param extract_slices: True - extract slices from volumes
+    :param epochs: number of epochs to train
     :return:
     """
     global logger
@@ -84,14 +58,14 @@ def train_model(
     use_axis = axis
 
     # Get paths to volumes and masks
-    mask_fns, fns = get_fns(input_dir)
+    mask_fns, fns = get_volume_paths(input_dir)
     n_volumes = 12 if train_all else 1
     train_masks = mask_fns[0:n_volumes]
-    train_volumes = [get_fn(fn) for fn in train_masks]
+    train_volumes = [get_volume_fn_from_mask_fn(fn) for fn in train_masks]
     valid_masks = mask_fns[12:13]
-    valid_volumes = [get_fn(fn) for fn in valid_masks]
+    valid_volumes = [get_volume_fn_from_mask_fn(fn) for fn in valid_masks]
     test_masks = mask_fns[13:14]
-    test_volumes = [get_fn(fn) for fn in test_masks]
+    test_volumes = [get_volume_fn_from_mask_fn(fn) for fn in test_masks]
     print(
         train_volumes, train_masks, valid_volumes, valid_masks, test_volumes, test_masks
     )
@@ -149,27 +123,15 @@ def train_model(
     print("Image and mask dimensions")
     print(type(image), image.shape, mask.shape)
 
-    # %% [code]
-    w, h = 10, 10
-    fig = plt.figure(figsize=(8, 8))
-    rows, columns = 1, 2
-    fig.add_subplot(rows, columns, 1)
-    plt.imshow(image[0])
-    fig.add_subplot(rows, columns, 2)
-    plt.imshow(mask[0])
-    # plt.show()
-    plt.savefig(fname=output_dir + "/input_sample.png")
+    # Show sample image
+    save_sample_image(image[0], mask[0], output_dir)
 
+    # Create segmentation model with pretrained encoder
     classes = ["1"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info("Use device: " + device)
     activation = "sigmoid" if len(classes) == 1 else "softmax"
     logger.info("Activation: " + activation)
-
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=12)
-    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
-
-    # create segmentation model with pretrained encoder
     if model_name == "unet":
         encoder_weights = "imagenet"
         model = smp.Unet(
@@ -186,14 +148,14 @@ def train_model(
     else:
         raise NoMatchingModelException
 
-    # %% [code]
+    # Define metrics, loss and optimizer
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    loss = smp.utils.losses.DiceLoss(eps=1.0)
     metrics = [
         smp.utils.metrics.IoU(eps=1.0),
         smp.utils.metrics.Fscore(eps=1.0),
     ]
+    loss = smp.utils.losses.DiceLoss(eps=1.0)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     # optimizer = torch.optim.Adam([
     #     {'params': model.decoder.parameters(), 'lr': 1e-4},
@@ -202,9 +164,24 @@ def train_model(
     #     {'params': model.encoder.parameters(), 'lr': 1e-6},
     # ])
 
-    # %% [code]
-    # create epoch runners
+    # Create epoch runners
     # it is a simple loop of iterating over dataloader`s samples
+    subset_indices = [150, 160]
+    subset_sampler = SubsetRandomSampler(subset_indices)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=8,
+        # shuffle=True,
+        num_workers=12,
+        sampler=subset_sampler,
+    )
+    valid_loader = DataLoader(
+        valid_dataset,
+        batch_size=1,
+        # shuffle=False,
+        num_workers=4,
+        sampler=subset_sampler,
+    )
     train_epoch = smp.utils.train.TrainEpoch(
         model,
         loss=loss,
@@ -216,132 +193,59 @@ def train_model(
     valid_epoch = smp.utils.train.ValidEpoch(
         model, loss=loss, metrics=metrics, device=device, verbose=True,
     )
-    return
 
-    # %% [code]
     max_score = 0
     train_history = []
     valid_history = []
-    for i in range(0, epochs):
-        print("\nEpoch: {}".format(i))
+    for epoch in range(0, epochs):
+        print("\nEpoch: {}".format(epoch))
         train_logs = train_epoch.run(train_loader)
         valid_logs = valid_epoch.run(valid_loader)
         train_history.append(train_logs)
         valid_history.append(valid_logs)
         # do something (save model, change lr, etc.)
-        if max_score < valid_logs["iou_score"]:
-            max_score = valid_logs["iou_score"]
-            torch.save(model, "./best_model.pth")
-            print("Model saved!")
+        if max_score < valid_logs["fscore"]:
+            max_score = valid_logs["fscore"]
+            torch.save(model, output_dir + "/best_model.pth")
+            print("Model saved at epoch:", epoch)
+        # if epoch == 25:
+        #     optimizer.param_groups[0]["lr"] = 1e-5
+        #     print("Decrease decoder learning rate to 1e-5!")
 
-        if i == 25:
-            optimizer.param_groups[0]["lr"] = 1e-5
-            print("Decrease decoder learning rate to 1e-5!")
+    history = format_history(train_history, valid_history)
+    get_best_metrics(history)
+    plot_graphs(history, output_dir)
 
-    # %% [code]
-    history = {
-        "loss": [],
-        "iou_score": [],
-        "f-score": [],
-        "val_loss": [],
-        "val_iou_score": [],
-        "val_f-score": [],
-    }
-    for train_log, valid_log in zip(train_history, valid_history):
-        history["loss"].append(train_log["dice_loss"])
-        history["iou_score"].append(train_log["iou_score"])
-        history["f-score"].append(train_log["fscore"])
-        history["val_loss"].append(valid_log["dice_loss"])
-        history["val_iou_score"].append(valid_log["iou_score"])
-        history["val_f-score"].append(valid_log["fscore"])
-
-    # %% [code]
-    best_train_loss = 1e10
-    best_train_row = ""
-    for idx, (loss, iou, dice) in enumerate(
-        zip(history["loss"], history["iou_score"], history["f-score"])
-    ):
-        if loss < best_train_loss:
-            best_train_loss = loss
-            epoch = "epoch: " + str(idx)
-            loss = "loss: {:.5}".format(loss)
-            iou = "iou: {:.5}".format(iou)
-            dice = "dice: {:.5}".format(dice)
-            best_train_row = " ".join([epoch, loss, iou, dice])
-
-    best_valid_loss = 1e10
-    best_valid_row = ""
-    for idx, (loss, iou, dice) in enumerate(
-        zip(history["val_loss"], history["val_iou_score"], history["val_f-score"])
-    ):
-        if loss < best_valid_loss:
-            best_valid_loss = loss
-            epoch = "epoch: " + str(idx)
-            loss = "loss: {:.5}".format(loss)
-            iou = "iou: {:.5}".format(iou)
-            dice = "dice: {:.5}".format(dice)
-            best_valid_row = " ".join([epoch, loss, iou, dice])
-
-    print("Train", best_train_row)
-    print("Valid", best_valid_row)
-
-    # %% [code]
-    # Plot training & validation iou_score values
-    plt.figure(figsize=(20, 5))
-    plt.subplot(121)
-    plt.plot(history["iou_score"])
-    plt.plot(history["val_iou_score"])
-    plt.title("Model iou_score")
-    plt.ylabel("iou_score")
-    plt.xlabel("Epoch")
-    plt.legend(["Train", "Test"], loc="upper left")
-
-    # Plot training & validation loss values
-    plt.subplot(122)
-    plt.plot(history["loss"])
-    plt.plot(history["val_loss"])
-    plt.title("Model loss")
-    plt.ylabel("Loss")
-    plt.xlabel("Epoch")
-    plt.legend(["Train", "Test"], loc="upper left")
-    plt.show()
-
-    # %% [markdown]
-    # # Evaluate model on test set
-
-    # %% [code]
-    # load best saved checkpoint
-    best_model = torch.load("./best_model.pth")
-
-    # %% [code]
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4)
+    # Evaluate model on test set, load best saved checkpoint
+    best_model = torch.load(output_dir + "/best_model.pth")
+    # Prepare test data
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=1,
+        # shuffle=False,
+        num_workers=4,
+        sampler=subset_sampler,
+    )
     test_epoch = smp.utils.train.ValidEpoch(
         best_model, loss=loss, metrics=metrics, device=device, verbose=True,
     )
     logs = test_epoch.run(test_loader)
-
-    # %% [code]
     print(logs)
 
-    # %% [markdown]
-    # # Visualize predictions
-
-    # %% [code]
-    for i in range(0, 5):
-        n = np.random.choice(len(test_dataset))
-        image, gt_mask = test_dataset[n]
-
-        gt_mask = gt_mask.squeeze()
-
-        x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
-        pr_mask = model.predict(x_tensor)
-        pr_mask = pr_mask.squeeze().cpu().numpy().round()
-
-        smp.utils.custom_functions.visualize(
-            image=image[0], gt_mask=gt_mask, pr_mask=pr_mask,
-        )
-
-    # TODO: remove exported slices
+    # Visualize predictions
+    # for i in range(0, 5):
+    #     n = np.random.choice(len(test_dataset))
+    #     image, gt_mask = test_dataset[n]
+    #
+    #     gt_mask = gt_mask.squeeze()
+    #
+    #     x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
+    #     pr_mask = model.predict(x_tensor)
+    #     pr_mask = pr_mask.squeeze().cpu().numpy().round()
+    #
+    #     smp.utils.custom_functions.visualize(
+    #         image=image[0], gt_mask=gt_mask, pr_mask=pr_mask,
+    #     )
 
 
 def arg_parser():
@@ -388,15 +292,6 @@ def arg_parser():
         "--epochs", type=int, default=1, help="number of epochs",
     )
     return parser
-
-
-def get_datetime_str():
-    from datetime import datetime
-
-    now = datetime.now()  # current date and time
-    date = now.strftime("%Y%m%d")
-    time = now.strftime("%H:%M:%S")
-    return date + "-" + time
 
 
 def main():

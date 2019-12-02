@@ -170,27 +170,27 @@ def train_model(
     # ])
 
     # Create DataLoaders
-    subset_sampler = SubsetRandomSampler(indices=[150, 160])
+    # subset_sampler = SubsetRandomSampler(indices=[150, 160])
     train_loader = DataLoader(
         train_dataset,
         batch_size=8,
-        # shuffle=True,
+        shuffle=True,
         num_workers=12,
-        sampler=subset_sampler,
+        # sampler=subset_sampler,
     )
     valid_loader = DataLoader(
         valid_dataset,
         batch_size=1,
-        # shuffle=False,
+        shuffle=False,
         num_workers=4,
-        sampler=subset_sampler,
+        # sampler=subset_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
-        # shuffle=False,
+        shuffle=False,
         num_workers=4,
-        sampler=subset_sampler,
+        # sampler=subset_sampler,
     )
     # Create epoch runners
     # it is a simple loop of iterating over dataloader`s samples
@@ -220,6 +220,9 @@ def train_model(
             max_score = valid_logs["fscore"]
             torch.save(model, output_dir + "/best_model.pth")
             print("Model saved at epoch:", epoch)
+        # else:
+        #     TODO: early_stopping
+
         # if epoch == 25:
         #     optimizer.param_groups[0]["lr"] = 1e-5
         #     print("Decrease decoder learning rate to 1e-5!")
@@ -234,6 +237,7 @@ def train_model(
         model, loss=loss, metrics=metrics, device=device, verbose=True
     )
     logs = test_epoch.run(test_loader)
+    print("Test dataset performance metrics")
     print(logs)
 
     # Visualize predictions
@@ -264,7 +268,7 @@ def get_overlay_masks(gt_mask, pr_mask):
 def main():
     """
     source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /home/segnet/dataset -a 012 -ex 0
+    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /datastore/home/segnet/datasets -a 0 --train_all all --extract_slices 1 --epochs 10
     """
     global logger
     args = arg_parser().parse_args()

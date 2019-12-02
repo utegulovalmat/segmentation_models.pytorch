@@ -1,21 +1,21 @@
 import traceback
-import segmentation_models_pytorch as smp
-from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
-from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
-from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
-from segmentation_models_pytorch.utils.data import MriDataset
-
 import torch
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import DataLoader
+
+import numpy as np
 import argparse
 import logging
 import sys
 import os
 import matplotlib.pyplot as plt
 import warnings
+import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
+from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
+from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
+from segmentation_models_pytorch.utils.data import MriDataset
 
-from .helpers import new_print
 from .helpers import get_volume_fn_from_mask_fn
 from .helpers import NoMatchingModelException
 from .helpers import save_sample_image
@@ -29,6 +29,11 @@ plt.rcParams["figure.figsize"] = (7, 7)
 warnings.filterwarnings("ignore")
 
 logger = None
+
+
+def new_print(*args):
+    global logger
+    return logger.info(" ".join(str(a) for a in args))
 
 
 def train_model(
@@ -66,9 +71,9 @@ def train_model(
     valid_volumes = [get_volume_fn_from_mask_fn(fn) for fn in valid_masks]
     test_masks = mask_fns[13:14]
     test_volumes = [get_volume_fn_from_mask_fn(fn) for fn in test_masks]
-    print(
-        train_volumes, train_masks, valid_volumes, valid_masks, test_volumes, test_masks
-    )
+    print("train", train_volumes, train_masks)
+    print("valid", valid_volumes, valid_masks)
+    print("test", test_volumes, test_masks)
 
     # Extract slices from volumes
     dataset_dir = "/".join(input_dir.split("/")[:-1])
@@ -164,10 +169,8 @@ def train_model(
     #     {'params': model.encoder.parameters(), 'lr': 1e-6},
     # ])
 
-    # Create epoch runners
-    # it is a simple loop of iterating over dataloader`s samples
-    subset_indices = [150, 160]
-    subset_sampler = SubsetRandomSampler(subset_indices)
+    # Create DataLoaders
+    subset_sampler = SubsetRandomSampler(indices=[150, 160])
     train_loader = DataLoader(
         train_dataset,
         batch_size=8,
@@ -182,6 +185,15 @@ def train_model(
         num_workers=4,
         sampler=subset_sampler,
     )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=1,
+        # shuffle=False,
+        num_workers=4,
+        sampler=subset_sampler,
+    )
+    # Create epoch runners
+    # it is a simple loop of iterating over dataloader`s samples
     train_epoch = smp.utils.train.TrainEpoch(
         model,
         loss=loss,
@@ -217,35 +229,78 @@ def train_model(
     plot_graphs(history, output_dir)
 
     # Evaluate model on test set, load best saved checkpoint
-    best_model = torch.load(output_dir + "/best_model.pth")
-    # Prepare test data
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=1,
-        # shuffle=False,
-        num_workers=4,
-        sampler=subset_sampler,
-    )
+    model = torch.load(output_dir + "/best_model.pth")
     test_epoch = smp.utils.train.ValidEpoch(
-        best_model, loss=loss, metrics=metrics, device=device, verbose=True,
+        model, loss=loss, metrics=metrics, device=device, verbose=True
     )
     logs = test_epoch.run(test_loader)
     print(logs)
 
     # Visualize predictions
-    # for i in range(0, 5):
-    #     n = np.random.choice(len(test_dataset))
-    #     image, gt_mask = test_dataset[n]
-    #
-    #     gt_mask = gt_mask.squeeze()
-    #
-    #     x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
-    #     pr_mask = model.predict(x_tensor)
-    #     pr_mask = pr_mask.squeeze().cpu().numpy().round()
-    #
-    #     smp.utils.custom_functions.visualize(
-    #         image=image[0], gt_mask=gt_mask, pr_mask=pr_mask,
-    #     )
+    for idx in range(0, 5):
+        n = np.random.choice(len(test_dataset))
+        image, gt_mask = test_dataset[n]
+        gt_mask = gt_mask.squeeze()
+        x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
+        pr_mask = model.predict(x_tensor)
+        pr_mask = pr_mask.squeeze().cpu().numpy().round()
+        overlay_prediction = image[0] * pr_mask
+        smp.utils.custom_functions.visualize(
+            output_path=output_dir + "/" + str(idx) + ".png",
+            image=image[0],
+            gt_mask=gt_mask,
+            pr_mask=pr_mask,
+            overlay_prediction=overlay_prediction,
+            overlay_masks=get_overlay_masks(gt_mask, pr_mask),
+        )
+
+
+def get_overlay_masks(gt_mask, pr_mask):
+    pr_mask[pr_mask > 0.5] = 1
+    mask = gt_mask * pr_mask
+    return mask
+
+
+def main():
+    """
+    source ~/ml-env3/bin/activate
+    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /home/segnet/dataset -a 012 -ex 0
+    """
+    global logger
+    args = arg_parser().parse_args()
+    base_path = "segmentation_models_pytorch/experiments/"
+    cur_datetime = get_datetime_str()
+    output_dir = (
+        base_path
+        + args.model_name
+        + "-"
+        + args.encoder
+        + "-"
+        + args.axis
+        + "-"
+        + cur_datetime
+    )
+    os.mkdir(output_dir)
+    logger = get_logger(output_dir)
+    try:
+        logger.info("Start")
+        train_model(
+            model_name=args.model_name,
+            encoder=args.encoder,
+            input_dir=args.input_dir,
+            output_dir=output_dir,
+            train_all=args.train_all == "all",
+            axis=args.axis,
+            extract_slices=args.extract_slices == 1,
+            epochs=args.epochs,
+        )
+        logger.info("Finish")
+        return 0
+    except Exception as e:
+        logger.error("Exception")
+        logger.error(str(e))
+        logger.error(traceback.format_exc())
+        return 1
 
 
 def arg_parser():
@@ -294,29 +349,8 @@ def arg_parser():
     return parser
 
 
-def main():
-    """
-    source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /home/segnet/dataset -a 012 -ex 0
-    """
+def get_logger(output_dir):
     global logger
-
-    args = arg_parser().parse_args()
-
-    base_path = "segmentation_models_pytorch/experiments/"
-    cur_datetime = get_datetime_str()
-    output_dir = (
-        base_path
-        + args.model_name
-        + "-"
-        + args.encoder
-        + "-"
-        + args.axis
-        + "-"
-        + cur_datetime
-    )
-    os.mkdir(output_dir)
-
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     log_filename = output_dir + "/train.log"
@@ -331,26 +365,7 @@ def main():
     ch.setFormatter(formatter)
     logger.addHandler(fh)
     logger.addHandler(ch)
-
-    try:
-        logger.info("Start")
-        train_model(
-            model_name=args.model_name,
-            encoder=args.encoder,
-            input_dir=args.input_dir,
-            output_dir=output_dir,
-            train_all=args.train_all == "all",
-            axis=args.axis,
-            extract_slices=args.extract_slices == 1,
-            epochs=args.epochs,
-        )
-        logger.info("Finish")
-        return 0
-    except Exception as e:
-        logger.error("Exception")
-        logger.error(str(e))
-        logger.error(traceback.format_exc())
-        return 1
+    return logger
 
 
 if __name__ == "__main__":

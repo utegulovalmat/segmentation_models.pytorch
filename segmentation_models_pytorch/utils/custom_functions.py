@@ -83,7 +83,7 @@ def get_preprocessing(preprocessing_fn=None):
     return A.Compose(_transform)
 
 
-def visualize(**images):
+def visualize(output_path, **images):
     """Plot images in one row.
     Helper function for data visualization"""
     n = len(images)
@@ -94,7 +94,8 @@ def visualize(**images):
         plt.yticks([])
         plt.title(" ".join(name.split("_")).title())
         plt.imshow(image)
-    plt.show()
+    # plt.show()
+    plt.savefig(fname=output_path)
 
 
 def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION["coronal"]):

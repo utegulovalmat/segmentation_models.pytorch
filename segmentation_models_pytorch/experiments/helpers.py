@@ -11,11 +11,6 @@ class NoMatchingModelException(Exception):
     pass
 
 
-def new_print(*args):
-    global logger
-    return logger.info(" ".join(str(a) for a in args))
-
-
 def get_volume_paths(input_dir: str):
     """Get paths to volumes
 

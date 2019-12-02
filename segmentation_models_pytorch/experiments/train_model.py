@@ -2,6 +2,11 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+import torch
+import segmentation_models_pytorch as smp
+import segmentation_models_pytorch.utils.custom_functions.get_train_augmentation as get_train_augmentation
+import segmentation_models_pytorch.utils.custom_functions.get_test_augmentation as get_test_augmentation
+import segmentation_models_pytorch.utils.custom_functions.get_preprocessing as get_preprocessing
 import numpy as np
 import argparse
 import logging
@@ -11,41 +16,22 @@ import matplotlib.pyplot as plt
 
 plt.rcParams["figure.figsize"] = (7, 7)
 
-import torch
 from torch.utils.data import DataLoader
-import segmentation_models_pytorch as smp
+
+logger = None
 
 
-def train_model(
-    model_name: str, encoder: str, input_dir: str, out_dir: str, axis: str = "012",
-):
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    base_path = "segmentation_models_pytorch/experiments/"
-    log_filename = base_path + model_name + "-" + encoder + "-" + axis + ".log"
-    fh = logging.FileHandler(log_filename)
-    fh.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    logger.addHandler(fh)
-    logger.addHandler(ch)
+def new_print(*args):
+    global logger
+    return logger.info(" ".join(str(a) for a in args))
 
-    # test
-    logger.debug("This is a debug message")
-    logger.info("This is an info message")
-    logger.warning("This is a warning message")
-    logger.error("This is an error message")
-    logger.critical("This is a critical message")
-    print("print message ---")
-    return
 
-    # %% [code]
+def get_fns(input_dir: str):
+    """Get paths to volumes
+
+    :param input_dir: directory with MRI volumes
+    :return: sorted list of paths to masks and volume images
+    """
     fns = []
     mask_fns = []
     for dirname, _, filenames in os.walk(input_dir):
@@ -57,58 +43,77 @@ def train_model(
                     fns.append(os.path.join(dirname, filename))
     mask_fns = sorted(mask_fns)
     fns = sorted(fns)
-    print("lens", len(mask_fns), len(fns))
-    zipped_fns = list(zip(fns, mask_fns))
-    print(zipped_fns[:1], "...")
+    return mask_fns, fns
 
-    # %% [code]
-    def get_fn(mask_filename):
-        return mask_filename.replace("S-label", "")
 
-    TRAIN_MASKS = mask_fns[0:13]
-    TRAIN = [get_fn(fn) for fn in TRAIN_MASKS]
+def get_fn(mask_filename):
+    """Extract volume path from mask path"""
+    return mask_filename.replace("S-label", "")
 
-    VALID_MASKS = mask_fns[12:13]
-    VALID = [get_fn(fn) for fn in VALID_MASKS]
 
-    TEST_MASKS = mask_fns[13:14]
-    TEST = [get_fn(fn) for fn in TEST_MASKS]
+def train_model(
+    model_name: str,
+    encoder: str,
+    input_dir: str,
+    output_dir: str,
+    train_all: bool,
+    axis: str = "012",
+):
+    """Script to train networks on MRI dataset
 
-    print(TRAIN, TRAIN_MASKS, VALID, VALID_MASKS, TEST, TEST_MASKS)
+    :param model_name: unet/pspnet/fpn/linknet
+    :param encoder: see encoders list at https://github.com/utegulovalmat/segmentation_models.pytorch
+    :param input_dir: path to folder with volumes and masks
+    :param output_dir: output folder for model predictions
+    :param axis: which axis should be used for training [0|1|2]
+    :param train_all: False means use 1 volume for training
+    :return:
+    """
+    global logger
+    print = new_print
+    use_axis = axis
 
-    EXPORTED_SLICES_DIR_TRAIN = "./export_slices_train/"
-    EXPORTED_SLICES_DIR_VALID = "./export_slices_valid/"
-    EXPORTED_SLICES_DIR_TEST = "./export_slices_test/"
-
-    USE_DIMENSIONS = "0"
-    smp.utils.custom_functions.extract_slices_from_volumes(
-        images=TRAIN,
-        masks=TRAIN_MASKS,
-        output_dir=EXPORTED_SLICES_DIR_TRAIN,
-        skip_empty_mask=True,
-        use_dimensions=USE_DIMENSIONS,
-    )
-    smp.utils.custom_functions.extract_slices_from_volumes(
-        images=VALID,
-        masks=VALID_MASKS,
-        output_dir=EXPORTED_SLICES_DIR_VALID,
-        skip_empty_mask=True,
-        use_dimensions=USE_DIMENSIONS,
-    )
-    smp.utils.custom_functions.extract_slices_from_volumes(
-        images=TEST,
-        masks=TEST_MASKS,
-        output_dir=EXPORTED_SLICES_DIR_TEST,
-        skip_empty_mask=True,
-        use_dimensions=USE_DIMENSIONS,
+    # Get paths to volumes and masks
+    mask_fns, fns = get_fns(input_dir)
+    n_volumes = 12 if train_all else 1
+    train_masks = mask_fns[0:n_volumes]
+    train_volumes = [get_fn(fn) for fn in train_masks]
+    valid_masks = mask_fns[12:13]
+    valid_volumes = [get_fn(fn) for fn in valid_masks]
+    test_masks = mask_fns[13:14]
+    test_volumes = [get_fn(fn) for fn in test_masks]
+    print(
+        train_volumes, train_masks, valid_volumes, valid_masks, test_volumes, test_masks
     )
 
-    # %% [code]
-    get_train_augmentation = smp.utils.custom_functions.get_train_augmentation
-    get_test_augmentation = smp.utils.custom_functions.get_test_augmentation
-    get_preprocessing = smp.utils.custom_functions.get_preprocessing
+    # Extract slices from volumes
+    dataset_dir = "/".join(input_dir.split("/")[:-1])
+    exported_slices_dir_train = dataset_dir + "/tif_slices_train/"
+    exported_slices_dir_valid = dataset_dir + "/tif_slices_valid/"
+    exported_slices_dir_test = dataset_dir + "/tif_slices_test/"
+    smp.utils.custom_functions.extract_slices_from_volumes(
+        images=train_volumes,
+        masks=train_masks,
+        output_dir=exported_slices_dir_train,
+        skip_empty_mask=True,
+        use_dimensions=use_axis,
+    )
+    smp.utils.custom_functions.extract_slices_from_volumes(
+        images=valid_volumes,
+        masks=valid_masks,
+        output_dir=exported_slices_dir_valid,
+        skip_empty_mask=True,
+        use_dimensions=use_axis,
+    )
+    smp.utils.custom_functions.extract_slices_from_volumes(
+        images=test_volumes,
+        masks=test_masks,
+        output_dir=exported_slices_dir_test,
+        skip_empty_mask=True,
+        use_dimensions=use_axis,
+    )
+
     MriDataset = smp.utils.data.MriDataset
-
     train_dataset = MriDataset(
         mode="train",
         augmentation=get_train_augmentation(),
@@ -338,19 +343,24 @@ def arg_parser():
         help="encoder name resnet34/resnet50/resnext50_32x4d/densenet121/efficientnet-b0/...",
     )
     parser.add_argument(
-        "-in", "--input_dir", type=str, help="path to NRRD image/volume directory"
+        "-in",
+        "--input_dir",
+        type=str,
+        default="/home/a/Thesis/datasets/mri/final_dataset",
+        help="path to NRRD image/volume directory",
     )
     parser.add_argument(
-        "-out",
-        "--out_dir",
+        "-t",
+        "--train_all",
         type=str,
-        help="path to output the corresponding tif image slices",
+        default="one",
+        help="use 'all' to train model on 12 volumes, else it will use 1 volume",
     )
     parser.add_argument(
         "-a",
         "--axis",
         type=str,
-        default="0",
+        default="012",
         help="axis of the 3d image array on which to sample the slices",
     )
     return parser
@@ -358,20 +368,46 @@ def arg_parser():
 
 def main():
     """
-    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in dataset -out outdir -a 012
+    source ~/ml-env3/bin/activate
+    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /home/segnet/dataset -a 012
     """
+    global logger
+
+    args = arg_parser().parse_args()
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    base_path = "segmentation_models_pytorch/experiments/"
+    log_filename = (
+        base_path + args.model_name + "-" + args.encoder + "-" + args.axis + ".log"
+    )
+    fh = logging.FileHandler(log_filename)
+    fh.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    output_dir = base_path + args.model_name + "-" + args.encoder + "-" + args.axis
     try:
-        args = arg_parser().parse_args()
+        logger.info("Start")
         train_model(
             model_name=args.model_name,
             encoder=args.encoder,
             input_dir=args.input_dir,
-            out_dir=args.out_dir,
+            output_dir=output_dir,
+            train_all=args.train_all == "all",
             axis=args.axis,
         )
+        logger.info("Finish")
         return 0
     except Exception as e:
-        print(e)
+        logger.error("Exception")
+        logger.error(str(e))
         return 1
 
 

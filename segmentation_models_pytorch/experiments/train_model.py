@@ -213,6 +213,7 @@ def train_model(
     best_epoch = 0
     train_history = []
     valid_history = []
+    early_stop_epochs = 0
     for epoch in range(0, epochs):
         print("\nEpoch: {}".format(epoch))
         train_logs = train_epoch.run(train_loader)
@@ -225,8 +226,12 @@ def train_model(
             torch.save(model, output_dir + "/best_model.pth")
             print("Model saved at epoch:", epoch)
             best_epoch = epoch
-        # else:
-        #     TODO: early_stopping
+            early_stop_epochs = 0
+        else:
+            early_stop_epochs += 1
+            if early_stop_epochs == 3:
+                logger.info("Early stopping at epoch: " + str(epoch))
+                break
 
         # if epoch == 25:
         #     optimizer.param_groups[0]["lr"] = 1e-5

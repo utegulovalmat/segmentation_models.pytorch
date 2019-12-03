@@ -4,6 +4,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import DataLoader
 
 import numpy as np
+import pandas as pd
 import argparse
 import logging
 import sys
@@ -24,6 +25,8 @@ from .helpers import format_history
 from .helpers import plot_graphs
 from .helpers import get_best_metrics
 from .helpers import get_datetime_str
+from .helpers import send_email
+from .helpers import format_test_result_metrics
 
 plt.rcParams["figure.figsize"] = (7, 7)
 warnings.filterwarnings("ignore")
@@ -170,27 +173,27 @@ def train_model(
     # ])
 
     # Create DataLoaders
-    # subset_sampler = SubsetRandomSampler(indices=[150, 160])
+    subset_sampler = SubsetRandomSampler(indices=[150, 160])
     train_loader = DataLoader(
         train_dataset,
         batch_size=8,
-        shuffle=True,
         num_workers=12,
-        # sampler=subset_sampler,
+        # shuffle=True,
+        sampler=subset_sampler,
     )
     valid_loader = DataLoader(
         valid_dataset,
         batch_size=1,
-        shuffle=False,
         num_workers=4,
-        # sampler=subset_sampler,
+        # shuffle=False,
+        sampler=subset_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
-        shuffle=False,
         num_workers=4,
-        # sampler=subset_sampler,
+        # shuffle=False,
+        sampler=subset_sampler,
     )
     # Create epoch runners
     # it is a simple loop of iterating over dataloader`s samples
@@ -207,6 +210,7 @@ def train_model(
     )
 
     max_score = 0
+    best_epoch = 0
     train_history = []
     valid_history = []
     for epoch in range(0, epochs):
@@ -220,6 +224,7 @@ def train_model(
             max_score = valid_logs["fscore"]
             torch.save(model, output_dir + "/best_model.pth")
             print("Model saved at epoch:", epoch)
+            best_epoch = epoch
         # else:
         #     TODO: early_stopping
 
@@ -228,7 +233,7 @@ def train_model(
         #     print("Decrease decoder learning rate to 1e-5!")
 
     history = format_history(train_history, valid_history)
-    get_best_metrics(history)
+    best_train_row, best_valid_row = get_best_metrics(history)
     plot_graphs(history, output_dir)
 
     # Evaluate model on test set, load best saved checkpoint
@@ -236,9 +241,10 @@ def train_model(
     test_epoch = smp.utils.train.ValidEpoch(
         model, loss=loss, metrics=metrics, device=device, verbose=True
     )
-    logs = test_epoch.run(test_loader)
+    best_test_row = test_epoch.run(test_loader)
+    best_test_row = format_test_result_metrics(best_test_row)
     print("Test dataset performance metrics")
-    print(logs)
+    print(best_test_row)
 
     # Visualize predictions
     for idx in range(0, 5):
@@ -257,6 +263,15 @@ def train_model(
             overlay_prediction=overlay_prediction,
             overlay_masks=get_overlay_masks(gt_mask, pr_mask),
         )
+    message = "Model: " + model_name + "-" + encoder + "\n"
+    message += "Extract slices: " + str(extract_slices) + "\n"
+    message += "Use axis: " + use_axis + "\n"
+    message += "Training volumes: " + str(len(train_masks)) + "\n"
+    message += "Best valid epoch: " + str(best_epoch) + "\n"
+    message += "Train_|_" + best_train_row + "\n"
+    message += "Valid_|_" + best_valid_row + "\n"
+    message += "Test__|_" + best_test_row + "\n"
+    return message
 
 
 def get_overlay_masks(gt_mask, pr_mask):
@@ -268,57 +283,53 @@ def get_overlay_masks(gt_mask, pr_mask):
 def main():
     """
     source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /datastore/home/segnet/datasets -a 0 --train_all all --extract_slices 1 --epochs 10
+    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /datastore/home/segnet/datasets -a 0 --train_all all --extract_slices 1 --epochs 3
     """
     global logger
     args = arg_parser().parse_args()
     base_path = "segmentation_models_pytorch/experiments/"
-    cur_datetime = get_datetime_str()
-    output_dir = (
-        base_path
-        + args.model_name
-        + "-"
-        + args.encoder
-        + "-"
-        + args.axis
-        + "-"
-        + cur_datetime
+    pipeline = pd.read_csv(
+        "segmentation_models_pytorch/experiments/pipeline.csv",
+        dtype={"axis": str, "epochs": int},
     )
-    os.mkdir(output_dir)
-    logger = get_logger(output_dir)
-    try:
-        logger.info("Start")
-        train_model(
-            model_name=args.model_name,
-            encoder=args.encoder,
-            input_dir=args.input_dir,
-            output_dir=output_dir,
-            train_all=args.train_all == "all",
-            axis=args.axis,
-            extract_slices=args.extract_slices == 1,
-            epochs=args.epochs,
-        )
-        logger.info("Finish")
-        return 0
-    except Exception as e:
-        logger.error("Exception")
-        logger.error(str(e))
-        logger.error(traceback.format_exc())
-        return 1
+    for idx, (done, model, encoder, axis, epochs) in pipeline.iterrows():
+        print(done, model, encoder, axis, epochs)
+        if done == "yes":
+            print("skip")
+            continue
+        cur_datetime = get_datetime_str()
+        output_dir = base_path + "-".join([model, encoder, axis, cur_datetime])
+        os.mkdir(output_dir)
+        logger = get_logger(output_dir)
+        try:
+            logger.info("Start")
+            result = train_model(
+                model_name=model,
+                encoder=encoder,
+                output_dir=output_dir,
+                axis=axis,
+                epochs=epochs,
+                input_dir=args.input_dir,
+                train_all=args.train_all == "all",
+                extract_slices=args.extract_slices == 1,
+            )
+            logger.info("Finish")
+            logger.info("Send email")
+            send_email(title=model + "-" + encoder + " SUCCESS", message=result)
+        except Exception as e:
+            logger.error("Exception")
+            logger.error(str(e))
+            logger.info("Send email")
+            logger.error(traceback.format_exc())
+            send_email(
+                title=model + "-" + encoder + " FAILED", message=traceback.format_exc()
+            )
+    return 0
 
 
 def arg_parser():
     parser = argparse.ArgumentParser(
         description="split 3d image into multiple 2d images"
-    )
-    parser.add_argument(
-        "-m", "--model_name", type=str, help="one of unet/pspnet/fpn/linknet"
-    )
-    parser.add_argument(
-        "-e",
-        "--encoder",
-        type=str,
-        help="encoder name resnet34/resnet50/resnext50_32x4d/densenet121/efficientnet-b0/...",
     )
     parser.add_argument(
         "-in",
@@ -335,20 +346,10 @@ def arg_parser():
         help="use 'all' to train model on 12 volumes, else it will use 1 volume",
     )
     parser.add_argument(
-        "-a",
-        "--axis",
-        type=str,
-        default="012",
-        help="axis of the 3d image array on which to sample the slices",
-    )
-    parser.add_argument(
         "--extract_slices",
         type=int,
         default=1,
         help="1 - extract slices, 0 - skip this step",
-    )
-    parser.add_argument(
-        "--epochs", type=int, default=1, help="number of epochs",
     )
     return parser
 

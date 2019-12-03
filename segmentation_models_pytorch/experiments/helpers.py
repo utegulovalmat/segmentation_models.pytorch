@@ -1,5 +1,5 @@
 import os
-
+import requests
 import matplotlib.pyplot as plt
 
 plt.rcParams["figure.figsize"] = (7, 7)
@@ -64,6 +64,14 @@ def format_history(train_history, valid_history):
         history["val_iou_score"].append(valid_log["iou_score"])
         history["val_f-score"].append(valid_log["fscore"])
     return history
+
+
+def format_test_result_metrics(best_test_row):
+    epoch = "epoch: XX"
+    loss = "loss: {:.5}".format(best_test_row["dice_loss"])
+    iou = "iou: {:.5}".format(best_test_row["iou_score"])
+    dice = "dice: {:.5}".format(best_test_row["fscore"])
+    return " | ".join([epoch, loss, iou, dice])
 
 
 def get_best_metrics(history):
@@ -136,6 +144,21 @@ def get_datetime_str():
     from datetime import datetime
 
     now = datetime.now()
-    date = now.strftime("%Y%m%d")
-    time = now.strftime("%H:%M:%S")
+    date = now.strftime("%Y-%m-%d")
+    time = now.strftime("%H-%M-%S")
     return date + "-" + time
+
+
+def send_email(title, message):
+    prefix = "Training finished with status: " + title + "\n\n"
+    message = prefix + message
+    return requests.post(
+        "https://api.mailgun.net/v3/sandboxb01eec054014436aaa9e1d865975a5e6.mailgun.org/messages",
+        auth=("api", "19731319a318a74521ebf9c03174638c-f7910792-ae143136"),
+        data={
+            "from": "Mailgun Sandbox <postmaster@sandboxb01eec054014436aaa9e1d865975a5e6.mailgun.org>",
+            "to": "Almat <utegulov@uni-koblenz.de>",
+            "subject": "Model training: " + title,
+            "text": message,
+        },
+    )

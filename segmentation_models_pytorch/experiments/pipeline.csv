@@ -1,0 +1,10 @@
+done,model,encoder,axis,epochs
+no,unet,resnet18,012,100
+no,unet,resnet34,012,100
+no,unet,se_resnet50,012,100
+no,unet,resnext50_32x4d,012,100
+no,unet,densenet121,012,100
+no,unet,densenet169,012,100
+no,unet,efficientnet-b0,012,100
+no,unet,efficientnet-b1,012,100
+no,unet,mobilenet_v2,012,100

@@ -288,7 +288,7 @@ def get_overlay_masks(gt_mask, pr_mask):
 def main():
     """
     source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -m unet -e resnet34 -in /datastore/home/segnet/datasets -a 0 --train_all all --extract_slices 1 --epochs 3
+    python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 0
     """
     global logger
     args = arg_parser().parse_args()

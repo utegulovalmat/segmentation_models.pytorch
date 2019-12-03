@@ -178,22 +178,22 @@ def train_model(
         train_dataset,
         batch_size=8,
         num_workers=12,
-        # shuffle=True,
-        sampler=subset_sampler,
+        shuffle=True,
+        # sampler=subset_sampler,
     )
     valid_loader = DataLoader(
         valid_dataset,
         batch_size=1,
         num_workers=4,
-        # shuffle=False,
-        sampler=subset_sampler,
+        shuffle=False,
+        # sampler=subset_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        # shuffle=False,
-        sampler=subset_sampler,
+        shuffle=False,
+        # sampler=subset_sampler,
     )
     # Create epoch runners
     # it is a simple loop of iterating over dataloader`s samples

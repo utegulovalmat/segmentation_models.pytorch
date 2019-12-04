@@ -320,15 +320,18 @@ def main():
             )
             logger.info("Finish")
             logger.info("Send email")
-            send_email(title=model + "-" + encoder + " SUCCESS", message=result)
+            title = model + "-" + encoder + " SUCCESS"
+            prefix = "Training finished with status: " + title + "\n\n"
+            message = prefix + result
+            logger.info(result)
+            send_email(title=title, message=message)
         except Exception as e:
             logger.error("Exception")
             logger.error(str(e))
             logger.info("Send email")
             logger.error(traceback.format_exc())
-            send_email(
-                title=model + "-" + encoder + " FAILED", message=traceback.format_exc()
-            )
+            title = model + "-" + encoder + " FAILED"
+            send_email(title=title, message=traceback.format_exc())
     return 0
 
 

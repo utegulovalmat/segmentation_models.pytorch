@@ -1,4 +1,5 @@
 import os
+import base64
 import requests
 import matplotlib.pyplot as plt
 
@@ -150,14 +151,24 @@ def get_datetime_str():
 
 
 def send_email(title, message):
-    prefix = "Training finished with status: " + title + "\n\n"
-    message = prefix + message
+    """
+    encoded = base64.b64encode(b'...')
+    data = base64.b64decode(encoded)
+    """
+    address = base64.b64decode(
+        b"aHR0cHM6Ly9hcGkubWFpbGd1bi5uZXQvdjMvc2FuZGJveGIwMWVlYzA1NDAxNDQzNmFhYTllMWQ4NjU5NzVhNWU2Lm1haWxndW4ub3JnL21lc3NhZ2Vz"
+    ).decode()
+    api = base64.b64decode(b"OTI2ZjIzNjI2NzY3ZmU2ZmNlY2EwOTU5MTNlZDU3ZTk=").decode()
+    from_email = base64.b64decode(
+        b"TWFpbGd1biBTYW5kYm94IDxwb3N0bWFzdGVyQHNhbmRib3hiMDFlZWMwNTQwMTQ0MzZhYWE5ZTFkODY1OTc1YTVlNi5tYWlsZ3VuLm9yZz4="
+    ).decode()
+    to = base64.b64decode(b"QWxtYXQgPHV0ZWd1bG92QHVuaS1rb2JsZW56LmRlPg==").decode()
     return requests.post(
-        "https://api.mailgun.net/v3/sandboxb01eec054014436aaa9e1d865975a5e6.mailgun.org/messages",
-        auth=("api", "19731319a318a74521ebf9c03174638c-f7910792-ae143136"),
+        address,
+        auth=("api", api),
         data={
-            "from": "Mailgun Sandbox <postmaster@sandboxb01eec054014436aaa9e1d865975a5e6.mailgun.org>",
-            "to": "Almat <utegulov@uni-koblenz.de>",
+            "from": from_email,
+            "to": to,
             "subject": "Model training: " + title,
             "text": message,
         },

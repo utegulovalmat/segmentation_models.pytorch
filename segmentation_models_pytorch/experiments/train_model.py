@@ -295,6 +295,10 @@ def main():
     """
     source ~/ml-env3/bin/activate
     python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 0
+
+    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 &
+    echo pid >> last_pid.txt
+    tail nohup.out -f
     """
     global logger
     args = arg_parser().parse_args()

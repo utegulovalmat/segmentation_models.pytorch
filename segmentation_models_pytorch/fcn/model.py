@@ -8,8 +8,8 @@ from torchvision import models
 class FCN(nn.Module):
     def __init__(
         self,
-        # encoder_name: str = "resnet34",
-        # encoder_depth: int = 5,
+        encoder_name: str = "resnet34",
+        encoder_depth: int = 5,
         # encoder_weights: str = "imagenet",
         # decoder_use_batchnorm: bool = True,
         # decoder_channels: List[int] = (256, 128, 64, 32, 16),
@@ -20,8 +20,10 @@ class FCN(nn.Module):
         # aux_params: Optional[dict] = None,
     ):
         super(FCN, self).__init__()
-        self.base_model = models.resnet18(pretrained=True)
-
+        if encoder_name == "resnet18":
+            self.base_model = models.resnet18(pretrained=True)
+        else:
+            raise
         layers = list(self.base_model.children())
         self.layer1 = nn.Sequential(*layers[:5])  # size=(N, 64, x.H/2, x.W/2)
         self.upsample1 = nn.Upsample(scale_factor=4, mode="bilinear")

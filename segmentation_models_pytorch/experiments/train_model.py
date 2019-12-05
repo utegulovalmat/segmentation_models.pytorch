@@ -7,7 +7,6 @@ import gc
 import time
 import numpy as np
 import pandas as pd
-import argparse
 import logging
 import sys
 import os
@@ -28,6 +27,8 @@ from .helpers import plot_graphs
 from .helpers import get_best_metrics
 from .helpers import get_datetime_str
 from .helpers import send_email
+from .helpers import arg_parser
+from .helpers import get_overlay_masks
 from .helpers import format_test_result_metrics
 
 plt.rcParams["figure.figsize"] = (7, 7)
@@ -153,7 +154,7 @@ def train_model(
             in_channels=1,
         )
     elif model_name == "fcn":
-        model = smp.FCN(classes=len(classes),)
+        model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     elif model_name == "fpn":
         model = smp.FPN("resnet34", in_channels=1)
     else:
@@ -274,21 +275,15 @@ def train_model(
             overlay_prediction=overlay_prediction,
             overlay_masks=get_overlay_masks(gt_mask, pr_mask),
         )
-    message = "Model: " + model_name + "-" + encoder + "\n"
-    message += "Extract slices: " + str(extract_slices) + "\n"
-    message += "Use axis: " + use_axis + "\n"
-    message += "Training volumes: " + str(len(train_masks)) + "\n"
-    message += "Best valid epoch: " + str(best_epoch) + "\n"
-    message += "Train_|_" + best_train_row + "\n"
-    message += "Valid_|_" + best_valid_row + "\n"
-    message += "Test__|_" + best_test_row + "\n"
+    message = "Model: <strong>" + model_name + "-" + encoder + "</strong><br>"
+    message += "Extract slices: " + str(extract_slices) + "<br>"
+    message += "Use axis: " + use_axis + "<br>"
+    message += "Training volumes: " + str(len(train_masks)) + "<br>"
+    message += "Best valid epoch: " + str(best_epoch) + "<br>"
+    message += "Train_|_" + best_train_row + "<br>"
+    message += "Valid_|_" + best_valid_row + "<br>"
+    message += "Test__|_" + best_test_row + "<br>"
     return message
-
-
-def get_overlay_masks(gt_mask, pr_mask):
-    pr_mask[pr_mask > 0.5] = 1
-    mask = gt_mask * pr_mask
-    return mask
 
 
 def main():
@@ -297,16 +292,14 @@ def main():
     python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 0
 
     nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 &
-    echo pid >> last_pid.txt
+    echo 8083 >> last_pid.txt
     tail nohup.out -f
     """
     global logger
     args = arg_parser().parse_args()
     base_path = "segmentation_models_pytorch/experiments/"
-    pipeline = pd.read_csv(
-        "segmentation_models_pytorch/experiments/pipeline.csv",
-        dtype={"axis": str, "epochs": int},
-    )
+    pipline_file = "segmentation_models_pytorch/experiments/pipeline.csv"
+    pipeline = pd.read_csv(pipline_file, dtype={"axis": str, "epochs": int},)
     for idx, (done, model, encoder, axis, epochs, batch) in pipeline.iterrows():
         if done == "yes":
             continue
@@ -339,44 +332,22 @@ def main():
             prefix = "Training finished with status: " + title + "\n\n"
             message = prefix + result
             logger.info(result + "\n\n" + "=" * 100)
+            mask = (pipeline["model"] == model) & (pipeline["encoder"] == encoder)
+            pipeline["done"][mask] = "yes"
+            pipeline.to_csv(pipline_file, index=False)
             logger.info("Send email")
-            send_email(title=title, message=message)
+            print(message)
+            # send_email(title=title, message=message)
         except Exception as e:
             logger.error("Exception")
             logger.error(str(e))
             logger.error(traceback.format_exc())
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
-            send_email(title=title, message=traceback.format_exc())
-        time.sleep(10)
+            # send_email(title=title, message=traceback.format_exc())
+        # break
+        # time.sleep(10)
     return 0
-
-
-def arg_parser():
-    parser = argparse.ArgumentParser(
-        description="split 3d image into multiple 2d images"
-    )
-    parser.add_argument(
-        "-in",
-        "--input_dir",
-        type=str,
-        default="/home/a/Thesis/datasets/mri/final_dataset",
-        help="path to NRRD image/volume directory",
-    )
-    parser.add_argument(
-        "-t",
-        "--train_all",
-        type=str,
-        default="one",
-        help="use 'all' to train model on 12 volumes, else it will use 1 volume",
-    )
-    parser.add_argument(
-        "--extract_slices",
-        type=int,
-        default=1,
-        help="1 - extract slices, 0 - skip this step",
-    )
-    return parser
 
 
 def get_logger(output_dir):

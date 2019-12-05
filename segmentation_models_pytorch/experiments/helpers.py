@@ -1,6 +1,6 @@
 import os
 import base64
-import requests
+import argparse
 import matplotlib.pyplot as plt
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
@@ -150,6 +150,40 @@ def get_datetime_str():
     date = now.strftime("%Y-%m-%d")
     time = now.strftime("%H-%M-%S")
     return date + "-" + time
+
+
+def get_overlay_masks(gt_mask, pr_mask):
+    # FIX: this doesn't show 2 overlay masks
+    pr_mask[pr_mask > 0.5] = 1
+    mask = gt_mask * pr_mask
+    return mask
+
+
+def arg_parser():
+    parser = argparse.ArgumentParser(
+        description="split 3d image into multiple 2d images"
+    )
+    parser.add_argument(
+        "-in",
+        "--input_dir",
+        type=str,
+        default="/home/a/Thesis/datasets/mri/final_dataset",
+        help="path to NRRD image/volume directory",
+    )
+    parser.add_argument(
+        "-t",
+        "--train_all",
+        type=str,
+        default="one",
+        help="use 'all' to train model on 12 volumes, else it will use 1 volume",
+    )
+    parser.add_argument(
+        "--extract_slices",
+        type=int,
+        default=1,
+        help="1 - extract slices, 0 - skip this step",
+    )
+    return parser
 
 
 def send_email(title, message):

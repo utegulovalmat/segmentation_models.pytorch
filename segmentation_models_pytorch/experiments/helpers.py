@@ -2,6 +2,8 @@ import os
 import base64
 import requests
 import matplotlib.pyplot as plt
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 plt.rcParams["figure.figsize"] = (7, 7)
 
@@ -152,24 +154,23 @@ def get_datetime_str():
 
 def send_email(title, message):
     """
+    import base64
     encoded = base64.b64encode(b'...')
     data = base64.b64decode(encoded)
     """
-    address = base64.b64decode(
-        b"aHR0cHM6Ly9hcGkubWFpbGd1bi5uZXQvdjMvc2FuZGJveGIwMWVlYzA1NDAxNDQzNmFhYTllMWQ4NjU5NzVhNWU2Lm1haWxndW4ub3JnL21lc3NhZ2Vz"
-    ).decode()
-    api = base64.b64decode(b"OTI2ZjIzNjI2NzY3ZmU2ZmNlY2EwOTU5MTNlZDU3ZTk=").decode()
-    from_email = base64.b64decode(
-        b"TWFpbGd1biBTYW5kYm94IDxwb3N0bWFzdGVyQHNhbmRib3hiMDFlZWMwNTQwMTQ0MzZhYWE5ZTFkODY1OTc1YTVlNi5tYWlsZ3VuLm9yZz4="
-    ).decode()
+    api = os.environ.get("SENDGRID_API_KEY")
     to = base64.b64decode(b"QWxtYXQgPHV0ZWd1bG92QHVuaS1rb2JsZW56LmRlPg==").decode()
-    return requests.post(
-        address,
-        auth=("api", api),
-        data={
-            "from": from_email,
-            "to": to,
-            "subject": "Model training: " + title,
-            "text": message,
-        },
+    message = Mail(
+        from_email=to,
+        to_emails=to,
+        subject="Model training: " + title,
+        html_content=message,
     )
+    try:
+        sg = SendGridAPIClient(api)
+        response = sg.send(message)
+        print(response.status_code)
+        print(response.body)
+        print(response.headers)
+    except Exception as e:
+        print(str(e))

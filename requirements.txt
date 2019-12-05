@@ -10,3 +10,4 @@ seaborn
 numpy
 pandas
 requests
+sendgrid

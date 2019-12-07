@@ -144,8 +144,8 @@ def train_model(
     logger.info("Use device: " + device)
     activation = "sigmoid" if len(classes) == 1 else "softmax"
     logger.info("Activation: " + activation)
+    encoder_weights = "imagenet"
     if model_name == "unet":
-        encoder_weights = "imagenet"
         model = smp.Unet(
             encoder_name=encoder,
             encoder_weights=encoder_weights,
@@ -156,7 +156,13 @@ def train_model(
     elif model_name == "fcn":
         model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     elif model_name == "fpn":
-        model = smp.FPN("resnet34", in_channels=1)
+        model = smp.FPN(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
     else:
         raise NoMatchingModelException
 

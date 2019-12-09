@@ -183,6 +183,12 @@ def arg_parser():
         default=1,
         help="1 - extract slices, 0 - skip this step",
     )
+    parser.add_argument(
+        "--use_axis",
+        type=str,
+        default="012",
+        help="which axises to extract for training",
+    )
     return parser
 
 

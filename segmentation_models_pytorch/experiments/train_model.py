@@ -45,71 +45,26 @@ def new_print(*args):
 def train_model(
     model_name: str,
     encoder: str,
-    input_dir: str,
+    input_dir: dict,
     output_dir: str,
-    train_all: bool,
     batch_size: int,
-    axis: str = "012",
-    extract_slices: bool = True,
     epochs: int = 1,
 ):
     """Script to train networks on MRI dataset
 
     :param model_name: one of unet/pspnet/fpn/linknet/fcn
     :param encoder: see encoders list at https://github.com/utegulovalmat/segmentation_models.pytorch
-    :param input_dir: path to folder with volumes and masks
+    :param input_dir: dict with paths to folders with volumes and masks
     :param output_dir: output folder for model predictions
-    :param axis: which axis should be used for training [0|1|2]
     :param batch_size: batch size
-    :param train_all: False means use 1 volume for training
-    :param extract_slices: True - extract slices from volumes
     :param epochs: number of epochs to train
     :return:
     """
     global logger
-    use_axis = axis
-
-    # Get paths to volumes and masks
-    mask_fns, fns = get_volume_paths(input_dir)
-    n_volumes = 12 if train_all else 1
-    train_masks = mask_fns[0:n_volumes]
-    train_volumes = [get_volume_fn_from_mask_fn(fn) for fn in train_masks]
-    valid_masks = mask_fns[12:13]
-    valid_volumes = [get_volume_fn_from_mask_fn(fn) for fn in valid_masks]
-    test_masks = mask_fns[13:14]
-    test_volumes = [get_volume_fn_from_mask_fn(fn) for fn in test_masks]
-    new_print("train", train_volumes, train_masks)
-    new_print("valid", valid_volumes, valid_masks)
-    new_print("test", test_volumes, test_masks)
-
-    # Extract slices from volumes
-    dataset_dir = "/".join(input_dir.split("/")[:-1])
-    exported_slices_dir_train = dataset_dir + "/tif_slices_train/"
-    exported_slices_dir_valid = dataset_dir + "/tif_slices_valid/"
-    exported_slices_dir_test = dataset_dir + "/tif_slices_test/"
-    new_print("Extract slices:", extract_slices)
-    if extract_slices:
-        smp.utils.custom_functions.extract_slices_from_volumes(
-            images=train_volumes,
-            masks=train_masks,
-            output_dir=exported_slices_dir_train,
-            skip_empty_mask=True,
-            use_dimensions=use_axis,
-        )
-        smp.utils.custom_functions.extract_slices_from_volumes(
-            images=valid_volumes,
-            masks=valid_masks,
-            output_dir=exported_slices_dir_valid,
-            skip_empty_mask=True,
-            use_dimensions=use_axis,
-        )
-        smp.utils.custom_functions.extract_slices_from_volumes(
-            images=test_volumes,
-            masks=test_masks,
-            output_dir=exported_slices_dir_test,
-            skip_empty_mask=True,
-            use_dimensions=use_axis,
-        )
+    logger.info("input_dir: " + str(input_dir))
+    exported_slices_dir_train = input_dir["train"]
+    exported_slices_dir_valid = input_dir["valid"]
+    exported_slices_dir_test = input_dir["test"]
 
     path, dirs, files = next(os.walk(exported_slices_dir_train))
     logger.info("exported_slices_dir_train: " + str(len(files) / 2))
@@ -124,19 +79,19 @@ def train_model(
         augmentation=get_train_augmentation(),
         preprocessing=get_preprocessing(),
     )
-    new_print(len(train_dataset))
+    logger.info("test_dataset: " + str(len(train_dataset)))
     valid_dataset = MriDataset(
         path=exported_slices_dir_valid,
         augmentation=get_test_augmentation(),
         preprocessing=get_preprocessing(),
     )
-    new_print(len(valid_dataset))
+    logger.info("valid_dataset: " + str(len(valid_dataset)))
     test_dataset = MriDataset(
         path=exported_slices_dir_test,
         augmentation=get_test_augmentation(),
         preprocessing=get_preprocessing(),
     )
-    new_print(len(test_dataset))
+    logger.info("test_dataset: " + str(len(test_dataset)))
 
     image, mask = train_dataset[150]
     new_print("Image and mask dimensions")
@@ -306,9 +261,6 @@ def train_model(
             overlay_masks=get_overlay_masks(gt_mask, pr_mask),
         )
     message = "Model: <strong>" + model_name + "-" + encoder + "</strong><br>"
-    message += "Extract slices: " + str(extract_slices) + "<br>"
-    message += "Use axis: " + use_axis + "<br>"
-    message += "Training volumes: " + str(len(train_masks)) + "<br>"
     message += "Best valid epoch: " + str(best_epoch) + "<br>"
     message += "Train_|_" + best_train_row + "<br>"
     message += "Valid_|_" + best_valid_row + "<br>"
@@ -319,39 +271,90 @@ def train_model(
 def main():
     """
     source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 0
+    python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices  --use_axis 1
 
     nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 &
     echo 8083 >> last_pid.txt
     tail nohup.out -f
     """
     global logger
-    args = arg_parser().parse_args()
     base_path = "segmentation_models_pytorch/experiments/"
     pipline_file = "segmentation_models_pytorch/experiments/pipeline.csv"
     pipeline = pd.read_csv(pipline_file, dtype={"axis": str, "epochs": int},)
-    for idx, (done, model, encoder, axis, epochs, batch) in pipeline.iterrows():
+
+    # Get arguments
+    args = arg_parser().parse_args()
+    input_dir = args.input_dir
+    extract_slices = args.extract_slices
+    train_all = args.train_all == "all"
+    use_axis = args.use_axis
+
+    # Get paths to volumes and masks
+    mask_fns, fns = get_volume_paths(input_dir)
+    n_volumes = 12 if train_all else 1
+    train_masks = mask_fns[0:n_volumes]
+    train_volumes = [get_volume_fn_from_mask_fn(fn) for fn in train_masks]
+    valid_masks = mask_fns[12:13]
+    valid_volumes = [get_volume_fn_from_mask_fn(fn) for fn in valid_masks]
+    test_masks = mask_fns[13:14]
+    test_volumes = [get_volume_fn_from_mask_fn(fn) for fn in test_masks]
+
+    # Extract slices from volumes
+    dataset_dir = "/".join(input_dir.split("/")[:-1])
+    exported_slices_dir_train = dataset_dir + "/tif_slices_train/"
+    exported_slices_dir_valid = dataset_dir + "/tif_slices_valid/"
+    exported_slices_dir_test = dataset_dir + "/tif_slices_test/"
+    input_dir = {
+        "train": exported_slices_dir_train,
+        "valid": exported_slices_dir_valid,
+        "test": exported_slices_dir_test,
+    }
+    if extract_slices:
+        smp.utils.custom_functions.extract_slices_from_volumes(
+            images=train_volumes,
+            masks=train_masks,
+            output_dir=exported_slices_dir_train,
+            skip_empty_mask=True,
+            use_dimensions=use_axis,
+        )
+        smp.utils.custom_functions.extract_slices_from_volumes(
+            images=valid_volumes,
+            masks=valid_masks,
+            output_dir=exported_slices_dir_valid,
+            skip_empty_mask=True,
+            use_dimensions=use_axis,
+        )
+        smp.utils.custom_functions.extract_slices_from_volumes(
+            images=test_volumes,
+            masks=test_masks,
+            output_dir=exported_slices_dir_test,
+            skip_empty_mask=True,
+            use_dimensions=use_axis,
+        )
+
+    for idx, (done, model, encoder, _axis, epochs, batch) in pipeline.iterrows():
         if done == "yes":
             continue
         cur_datetime = get_datetime_str()
-        output_dir = base_path + "-".join([model, encoder, axis, cur_datetime])
+        output_dir = base_path + "-".join([model, encoder, use_axis, cur_datetime])
         os.mkdir(output_dir)
         logger = get_logger(output_dir)
         logger.info("done, model, encoder, axis, epochs, batch")
         logger.info(
-            " ".join([str(i) for i in [done, model, encoder, axis, epochs, batch]])
+            " ".join([str(i) for i in [done, model, encoder, use_axis, epochs, batch]])
         )
+        new_print("Extract slices:", extract_slices)
+        new_print("train", train_volumes, train_masks)
+        new_print("valid", valid_volumes, valid_masks)
+        new_print("test", test_volumes, test_masks)
         try:
             logger.info("\n\n\nStart training " + output_dir + "\n\n")
             result = train_model(
                 model_name=model,
                 encoder=encoder,
                 output_dir=output_dir,
-                axis=axis,
                 epochs=epochs,
-                input_dir=args.input_dir,
-                train_all=args.train_all == "all",
-                extract_slices=args.extract_slices == 1,
+                input_dir=input_dir,
                 batch_size=batch,
             )
             if torch.cuda.is_available():
@@ -401,11 +404,16 @@ if __name__ == "__main__":
     """
     Encoders: https://github.com/qubvel/segmentation_models.pytorch
 
-    This is for axis 0, all volumes
+    ## Axis 0
     ls tif_slices_valid | wc -l ## 490
     ls tif_slices_test | wc -l ## 352
-    ls tif_slices_train | wc -l ## 5372
+    ls tif_slices_train | wc -l ## 5372 - all volumes
+    ls tif_slices_train | wc -l ## 454 - one volume
 
-
+    ## Axis 012
+    ls tif_slices_valid/ | wc -l ## 1254
+    ls tif_slices_test | wc -l ## 1206
+    ls tif_slices_train | wc -l ## 1226 - one volume
+    ls tif_slices_train | wc -l ## ... - all volumes
     """
     sys.exit(main())

@@ -271,9 +271,9 @@ def train_model(
 def main():
     """
     source ~/ml-env3/bin/activate
-    python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices  --use_axis 1
+    python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 1 --use_axis 1
 
-    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 &
+    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 --use_axis 0 &
     echo 8083 >> last_pid.txt
     tail nohup.out -f
     """
@@ -317,6 +317,7 @@ def main():
             skip_empty_mask=True,
             use_dimensions=use_axis,
         )
+        print("train", train_volumes, train_masks)
         smp.utils.custom_functions.extract_slices_from_volumes(
             images=valid_volumes,
             masks=valid_masks,
@@ -324,6 +325,7 @@ def main():
             skip_empty_mask=True,
             use_dimensions=use_axis,
         )
+        print("valid", valid_volumes, valid_masks)
         smp.utils.custom_functions.extract_slices_from_volumes(
             images=test_volumes,
             masks=test_masks,
@@ -331,6 +333,7 @@ def main():
             skip_empty_mask=True,
             use_dimensions=use_axis,
         )
+        print("test", test_volumes, test_masks)
 
     for idx, (done, model, encoder, _axis, epochs, batch) in pipeline.iterrows():
         if done == "yes":

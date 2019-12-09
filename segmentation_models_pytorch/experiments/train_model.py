@@ -375,7 +375,6 @@ def main():
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
             send_email(title=title, message=traceback.format_exc())
-        break
     return 0
 
 

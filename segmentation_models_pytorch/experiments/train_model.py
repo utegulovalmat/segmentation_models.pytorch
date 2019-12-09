@@ -111,6 +111,13 @@ def train_model(
             use_dimensions=use_axis,
         )
 
+    path, dirs, files = next(os.walk(exported_slices_dir_train))
+    logger.info("exported_slices_dir_train: " + str(len(files) / 2))
+    path, dirs, files = next(os.walk(exported_slices_dir_valid))
+    logger.info("exported_slices_dir_valid: " + str(len(files) / 2))
+    path, dirs, files = next(os.walk(exported_slices_dir_test))
+    logger.info("exported_slices_dir_test: " + str(len(files) / 2))
+
     # Define datasets
     train_dataset = MriDataset(
         path=exported_slices_dir_train,
@@ -368,6 +375,7 @@ def main():
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
             send_email(title=title, message=traceback.format_exc())
+        break
     return 0
 
 
@@ -393,5 +401,12 @@ def get_logger(output_dir):
 if __name__ == "__main__":
     """
     Encoders: https://github.com/qubvel/segmentation_models.pytorch
+
+    This is for axis 0, all volumes
+    ls tif_slices_valid | wc -l ## 490
+    ls tif_slices_test | wc -l ## 352
+    ls tif_slices_train | wc -l ## 5372
+
+
     """
     sys.exit(main())

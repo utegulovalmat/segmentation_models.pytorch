@@ -70,11 +70,11 @@ def format_history(train_history, valid_history):
 
 
 def format_test_result_metrics(best_test_row):
-    epoch = "epoch: XX"
-    loss = "loss: {:.5}".format(best_test_row["dice_loss"])
-    iou = "iou: {:.5}".format(best_test_row["iou_score"])
-    dice = "dice: {:.5}".format(best_test_row["fscore"])
-    return " | ".join([epoch, loss, iou, dice])
+    epoch = "epoch: XX\n"
+    loss = "loss: \n{:.5}".format(best_test_row["dice_loss"])
+    iou = "iou: \n{:.5}".format(best_test_row["iou_score"])
+    dice = "dice: \n{:.5}".format(best_test_row["fscore"])
+    return "\n | ".join([epoch, loss, iou, dice])
 
 
 def get_best_metrics(history):
@@ -85,11 +85,11 @@ def get_best_metrics(history):
     ):
         if loss < best_train_loss:
             best_train_loss = loss
-            epoch = "epoch: " + str(idx)
-            loss = "loss: {:.5}".format(loss)
-            iou = "iou: {:.5}".format(iou)
-            dice = "dice: {:.5}".format(dice)
-            best_train_row = " ".join([epoch, loss, iou, dice])
+            epoch = "epoch: \n" + str(idx)
+            loss = "loss: \n{:.5}".format(loss)
+            iou = "iou: \n{:.5}".format(iou)
+            dice = "dice: \n{:.5}".format(dice)
+            best_train_row = "\n ".join([epoch, loss, iou, dice])
 
     best_valid_loss = 1e10
     best_valid_row = ""
@@ -98,11 +98,11 @@ def get_best_metrics(history):
     ):
         if loss < best_valid_loss:
             best_valid_loss = loss
-            epoch = "epoch: " + str(idx)
-            loss = "loss: {:.5}".format(loss)
-            iou = "iou: {:.5}".format(iou)
-            dice = "dice: {:.5}".format(dice)
-            best_valid_row = " ".join([epoch, loss, iou, dice])
+            epoch = "epoch: \n" + str(idx)
+            loss = "loss: \n{:.5}".format(loss)
+            iou = "iou: \n{:.5}".format(iou)
+            dice = "dice: \n{:.5}".format(dice)
+            best_valid_row = "\n ".join([epoch, loss, iou, dice])
 
     print("Best train |", best_train_row)
     print("Best valid |", best_valid_row)

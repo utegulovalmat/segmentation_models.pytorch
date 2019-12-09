@@ -154,9 +154,26 @@ def train_model(
             in_channels=1,
         )
     elif model_name == "fcn":
+        # TODO: add flexibility with encoder selection
         model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     elif model_name == "fpn":
         model = smp.FPN(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "linknet":
+        model = smp.Linknet(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "pspnet":
+        model = smp.PSPNet(
             encoder_name=encoder,
             encoder_weights=encoder_weights,
             classes=len(classes),
@@ -173,6 +190,7 @@ def train_model(
         smp.utils.metrics.IoU(eps=1.0),
         smp.utils.metrics.Fscore(eps=1.0),
     ]
+    # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     # optimizer = torch.optim.Adam([
@@ -265,9 +283,8 @@ def train_model(
     logger.info(best_test_row)
 
     # Visualize predictions
-    for idx in range(0, 5):
-        n = np.random.choice(len(test_dataset))
-        image, gt_mask = test_dataset[n]
+    for idx in range(0, len(test_dataset), 10):
+        image, gt_mask = test_dataset[idx]
         gt_mask = gt_mask.squeeze()
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor)
@@ -343,16 +360,14 @@ def main():
             pipeline.to_csv(pipline_file, index=False)
             logger.info("Send email")
             print(message)
-            # send_email(title=title, message=message)
+            send_email(title=title, message=message)
         except Exception as e:
             logger.error("Exception")
             logger.error(str(e))
             logger.error(traceback.format_exc())
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
-            # send_email(title=title, message=traceback.format_exc())
-        # break
-        # time.sleep(10)
+            send_email(title=title, message=traceback.format_exc())
     return 0
 
 
@@ -378,56 +393,5 @@ def get_logger(output_dir):
 if __name__ == "__main__":
     """
     Encoders: https://github.com/qubvel/segmentation_models.pytorch
-
-    Encoder	    Weights	    Params, M
-    resnet18	imagenet	11M
-    resnet34	imagenet	21M
-    resnet50	imagenet	23M
-    resnet101	imagenet	42M
-    resnet152	imagenet	58M
-    resnext50_32x4d	imagenet	22M
-    resnext101_32x8d	imagenet
-    instagram	86M
-    resnext101_32x16d	instagram	191M
-    resnext101_32x32d	instagram	466M
-    resnext101_32x48d	instagram	826M
-    dpn68	imagenet	11M
-    dpn68b	imagenet+5k	11M
-    dpn92	imagenet+5k	34M
-    dpn98	imagenet	58M
-    dpn107	imagenet+5k	84M
-    dpn131	imagenet	76M
-    vgg11	imagenet	9M
-    vgg11_bn	imagenet	9M
-    vgg13	imagenet	9M
-    vgg13_bn	imagenet	9M
-    vgg16	imagenet	14M
-    vgg16_bn	imagenet	14M
-    vgg19	imagenet	20M
-    vgg19_bn	imagenet	20M
-    senet154	imagenet	113M
-    se_resnet50	imagenet	26M
-    se_resnet101	imagenet	47M
-    se_resnet152	imagenet	64M
-    se_resnext50_32x4d	imagenet	25M
-    se_resnext101_32x4d	imagenet	46M
-    densenet121	imagenet	6M
-    densenet169	imagenet	12M
-    densenet201	imagenet	18M
-    densenet161	imagenet	26M
-    inceptionresnetv2	imagenet
-    imagenet+background	54M
-    inceptionv4	imagenet
-    imagenet+background	41M
-    efficientnet-b0	imagenet	4M
-    efficientnet-b1	imagenet	6M
-    efficientnet-b2	imagenet	7M
-    efficientnet-b3	imagenet	10M
-    efficientnet-b4	imagenet	17M
-    efficientnet-b5	imagenet	28M
-    efficientnet-b6	imagenet	40M
-    efficientnet-b7	imagenet	63M
-    mobilenet_v2	imagenet	2M
-    xception	imagenet	22M
     """
     sys.exit(main())

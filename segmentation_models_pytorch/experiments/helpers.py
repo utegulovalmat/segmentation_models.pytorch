@@ -1,7 +1,10 @@
-import os
-import base64
 import argparse
+import base64
+import os
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -69,44 +72,87 @@ def format_history(train_history, valid_history):
     return history
 
 
-def format_test_result_metrics(best_test_row):
-    epoch = "epoch: XX\n"
-    loss = "loss: \n{:.5}".format(best_test_row["dice_loss"])
-    iou = "iou: \n{:.5}".format(best_test_row["iou_score"])
-    dice = "dice: \n{:.5}".format(best_test_row["fscore"])
-    return "\n | ".join([epoch, loss, iou, dice])
+def get_best_metrics(history, mode):
+    if mode == "train":
+        best_train_loss = 1e10
+        train_metrics = None
+        for idx, (loss, iou, dice) in enumerate(
+            zip(history["loss"], history["iou_score"], history["f-score"])
+        ):
+            if loss < best_train_loss:
+                best_train_loss = loss
+                train_metrics = {
+                    "epoch": str(idx),
+                    "loss": best_train_loss,
+                    "iou": iou,
+                    "dice": dice,
+                }
+        print("Best train |", train_metrics)
+        return train_metrics
+
+    if mode == "val":
+        best_valid_loss = 1e10
+        valid_metrics = None
+        for idx, (loss, iou, dice) in enumerate(
+            zip(history["val_loss"], history["val_iou_score"], history["val_f-score"])
+        ):
+            if loss < best_valid_loss:
+                best_valid_loss = loss
+                valid_metrics = {
+                    "epoch": str(idx),
+                    "loss": best_valid_loss,
+                    "iou": iou,
+                    "dice": dice,
+                }
+        print("Best valid |", valid_metrics)
+        return valid_metrics
+
+    if mode == "test":
+        test_metrics = {
+            "epoch": 0,
+            "loss": history["dice_loss"],
+            "iou": history["iou_score"],
+            "dice": history["fscore"],
+        }
+        return test_metrics
 
 
-def get_best_metrics(history):
-    best_train_loss = 1e10
-    best_train_row = ""
-    for idx, (loss, iou, dice) in enumerate(
-        zip(history["loss"], history["iou_score"], history["f-score"])
-    ):
-        if loss < best_train_loss:
-            best_train_loss = loss
-            epoch = "epoch: \n" + str(idx)
-            loss = "loss: \n{:.5}".format(loss)
-            iou = "iou: \n{:.5}".format(iou)
-            dice = "dice: \n{:.5}".format(dice)
-            best_train_row = "\n ".join([epoch, loss, iou, dice])
+def format_metrics(metrics, mode):
+    if mode == "train":
+        epoch = metrics["epoch"]
+        loss = metrics["loss"]
+        iou = metrics["iou"]
+        dice = metrics["dice"]
+    elif mode == "val":
+        epoch = metrics["epoch"]
+        loss = metrics["loss"]
+        iou = metrics["iou"]
+        dice = metrics["dice"]
+    elif mode == "test":
+        epoch = 0
+        loss = metrics["loss"]
+        iou = metrics["iou"]
+        dice = metrics["dice"]
+    else:
+        raise
+    loss = "loss: \n{:.5}".format(loss)
+    iou = "iou: \n{:.5}".format(iou)
+    dice = "dice: \n{:.5}".format(dice)
+    return "\n ".join(str(i) for i in [epoch, loss, iou, dice])
 
-    best_valid_loss = 1e10
-    best_valid_row = ""
-    for idx, (loss, iou, dice) in enumerate(
-        zip(history["val_loss"], history["val_iou_score"], history["val_f-score"])
-    ):
-        if loss < best_valid_loss:
-            best_valid_loss = loss
-            epoch = "epoch: \n" + str(idx)
-            loss = "loss: \n{:.5}".format(loss)
-            iou = "iou: \n{:.5}".format(iou)
-            dice = "dice: \n{:.5}".format(dice)
-            best_valid_row = "\n ".join([epoch, loss, iou, dice])
 
-    print("Best train |", best_train_row)
-    print("Best valid |", best_valid_row)
-    return best_train_row, best_valid_row
+def combine_results(train_metrics, valid_metrics, test_metrics):
+    return {
+        "train_loss": train_metrics["loss"],
+        "train_iou": train_metrics["iou"],
+        "train_dice": train_metrics["dice"],
+        "valid_loss": valid_metrics["loss"],
+        "valid_iou": valid_metrics["iou"],
+        "valid_dice": valid_metrics["dice"],
+        "test_loss": test_metrics["loss"],
+        "test_iou": test_metrics["iou"],
+        "test_dice": test_metrics["dice"],
+    }
 
 
 def plot_graphs(history, output_dir):
@@ -190,6 +236,30 @@ def arg_parser():
         help="which axises to extract for training",
     )
     return parser
+
+
+def save_results(filename, results):
+    df = pd.read_csv(
+        filename,
+        dtype={
+            "model": str,
+            "encoder": str,
+            "axis": str,
+            "imagenet": str,
+            "train_loss": np.float32,
+            "train_iou": np.float32,
+            "train_dice": np.float32,
+            "valid_loss": np.float32,
+            "valid_iou": np.float32,
+            "valid_dice": np.float32,
+            "test_loss": np.float32,
+            "test_iou": np.float32,
+            "test_dice": np.float32,
+        },
+    )
+    df = df.append(other=results, ignore_index=True)
+    df.to_csv(filename, index=False)
+    return df.iloc[-1]
 
 
 def send_email(title, message):

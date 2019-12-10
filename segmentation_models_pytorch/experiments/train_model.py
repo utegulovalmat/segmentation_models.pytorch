@@ -1,35 +1,35 @@
+import logging
+import os
+import sys
 import traceback
-import torch
-from torch.utils.data.sampler import SubsetRandomSampler
-from torch.utils.data import DataLoader
+import warnings
 
 import gc
-import time
-import numpy as np
-import pandas as pd
-import logging
-import sys
-import os
 import matplotlib.pyplot as plt
-import warnings
-import segmentation_models_pytorch as smp
-from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
-from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
-from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
-from segmentation_models_pytorch.utils.data import MriDataset
+import pandas as pd
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler
 
-from segmentation_models_pytorch.experiments.helpers import get_volume_fn_from_mask_fn
+import segmentation_models_pytorch as smp
 from segmentation_models_pytorch.experiments.helpers import NoMatchingModelException
-from segmentation_models_pytorch.experiments.helpers import save_sample_image
-from segmentation_models_pytorch.experiments.helpers import get_volume_paths
+from segmentation_models_pytorch.experiments.helpers import arg_parser
+from segmentation_models_pytorch.experiments.helpers import combine_results
 from segmentation_models_pytorch.experiments.helpers import format_history
-from segmentation_models_pytorch.experiments.helpers import plot_graphs
+from segmentation_models_pytorch.experiments.helpers import format_metrics
 from segmentation_models_pytorch.experiments.helpers import get_best_metrics
 from segmentation_models_pytorch.experiments.helpers import get_datetime_str
-from segmentation_models_pytorch.experiments.helpers import send_email
-from segmentation_models_pytorch.experiments.helpers import arg_parser
 from segmentation_models_pytorch.experiments.helpers import get_overlay_masks
-from segmentation_models_pytorch.experiments.helpers import format_test_result_metrics
+from segmentation_models_pytorch.experiments.helpers import get_volume_fn_from_mask_fn
+from segmentation_models_pytorch.experiments.helpers import get_volume_paths
+from segmentation_models_pytorch.experiments.helpers import plot_graphs
+from segmentation_models_pytorch.experiments.helpers import save_results
+from segmentation_models_pytorch.experiments.helpers import save_sample_image
+from segmentation_models_pytorch.experiments.helpers import send_email
+from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
+from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
+from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
+from segmentation_models_pytorch.utils.data import MriDataset
 
 plt.rcParams["figure.figsize"] = (7, 7)
 warnings.filterwarnings("ignore")
@@ -115,9 +115,6 @@ def train_model(
             activation=activation,
             in_channels=1,
         )
-    elif model_name == "fcn":
-        # TODO: add flexibility with encoder selection
-        model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     elif model_name == "fpn":
         model = smp.FPN(
             encoder_name=encoder,
@@ -142,6 +139,9 @@ def train_model(
             activation=activation,
             in_channels=1,
         )
+    elif model_name == "fcn":
+        # TODO: add flexibility with encoder selection
+        model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     else:
         raise NoMatchingModelException
 
@@ -227,7 +227,10 @@ def train_model(
                 break
 
     history = format_history(train_history, valid_history)
-    best_train_row, best_valid_row = get_best_metrics(history)
+    train_metrics = get_best_metrics(history=history, mode="train")
+    valid_metrics = get_best_metrics(history=history, mode="val")
+    best_train_row = format_metrics(metrics=train_metrics, mode="train")
+    best_valid_row = format_metrics(metrics=valid_metrics, mode="val")
     plot_graphs(history, output_dir)
     logger.info("Train performance metrics")
     logger.info(best_train_row)
@@ -239,8 +242,9 @@ def train_model(
     test_epoch = smp.utils.train.ValidEpoch(
         model, loss=loss, metrics=metrics, device=device, verbose=True
     )
-    best_test_row = test_epoch.run(test_loader)
-    best_test_row = format_test_result_metrics(best_test_row)
+    test_metrics = test_epoch.run(test_loader)
+    test_metrics = get_best_metrics(history=test_metrics, mode="test")
+    best_test_row = format_metrics(test_metrics, mode="test")
     logger.info("Test performance metrics")
     logger.info(best_test_row)
 
@@ -260,12 +264,14 @@ def train_model(
             overlay_prediction=overlay_prediction,
             overlay_masks=get_overlay_masks(gt_mask, pr_mask),
         )
+
+    results = combine_results(train_metrics, valid_metrics, test_metrics)
     message = "Model: <strong>" + model_name + "-" + encoder + "</strong><br>"
     message += "Best valid epoch: " + str(best_epoch) + "<br>"
-    message += "Train_|_" + best_train_row + "<br>"
-    message += "Valid_|_" + best_valid_row + "<br>"
-    message += "Test__|_" + best_test_row + "<br>"
-    return message
+    message += "Train<br>\n" + best_train_row + "\n<br>"
+    message += "Valid<br>\n" + best_valid_row + "\n<br>"
+    message += "Test<br>\n" + best_test_row + "\n<br>"
+    return message, results
 
 
 def main():
@@ -274,11 +280,13 @@ def main():
     python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 1 --use_axis 1
 
     nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 --use_axis 0 &
-    echo 8083 >> last_pid.txt
+    >> [<pid>] # returns process id
+    echo pid >> last_pid.txt
     tail nohup.out -f
     """
     global logger
     base_path = "segmentation_models_pytorch/experiments/"
+    results_file = "segmentation_models_pytorch/experiments/results.csv"
     pipline_file = "segmentation_models_pytorch/experiments/pipeline.csv"
     pipeline = pd.read_csv(pipline_file, dtype={"axis": str, "epochs": int},)
 
@@ -338,6 +346,8 @@ def main():
     for idx, (done, model, encoder, _axis, epochs, batch) in pipeline.iterrows():
         if done == "yes":
             continue
+        if use_axis != _axis:
+            continue
         cur_datetime = get_datetime_str()
         output_dir = base_path + "-".join([model, encoder, use_axis, cur_datetime])
         os.mkdir(output_dir)
@@ -352,7 +362,7 @@ def main():
         new_print("test", test_volumes, test_masks)
         try:
             logger.info("\n\n\nStart training " + output_dir + "\n\n")
-            result = train_model(
+            message, results = train_model(
                 model_name=model,
                 encoder=encoder,
                 output_dir=output_dir,
@@ -366,11 +376,21 @@ def main():
             logger.info("Finish")
             title = model + "-" + encoder + " SUCCESS"
             prefix = "Training finished with status: " + title + "\n\n"
-            message = prefix + result
-            logger.info(result + "\n\n" + "=" * 100)
+            message = prefix + message
+            logger.info(message + "\n\n" + "=" * 100)
             mask = (pipeline["model"] == model) & (pipeline["encoder"] == encoder)
             pipeline["done"][mask] = "yes"
             pipeline.to_csv(pipline_file, index=False)
+
+            model_results = {
+                "model": model,
+                "encoder": encoder,
+                "axis": use_axis,
+                "imagenet": "yes",  # TODO: pass this to model trainer
+            }
+            model_results.update(results)
+            last_row = save_results(filename=results_file, results=model_results)
+            message += "<br>" + str(last_row.to_list())
             logger.info("Send email")
             print(message)
             send_email(title=title, message=message)

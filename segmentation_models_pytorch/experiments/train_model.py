@@ -279,7 +279,18 @@ def main():
     source ~/ml-env3/bin/activate
     python -m segmentation_models_pytorch.experiments.train_model -in /home/a/Thesis/datasets/mri/final_dataset --train_all all --extract_slices 1 --use_axis 1
 
-    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 0 --use_axis 0 &
+    # train using axis 0 - all volumes
+    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 1 --use_axis 0 &
+
+    # train using axis 1 - all volumes
+    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 1 --use_axis 1 &
+
+    # train using axis 2 - all volumes
+    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 1 --use_axis 2 &
+
+    # train using axis 012 - all volumes
+    nohup python -m segmentation_models_pytorch.experiments.train_model -in /datastore/home/segnet/datasets --train_all all --extract_slices 1 --use_axis 012 &
+
     >> [<pid>] # returns process id
     echo pid >> last_pid.txt
     tail nohup.out -f

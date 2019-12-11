@@ -3,8 +3,8 @@ import os
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 
-from .custom_functions import normalize_0_1
-from .custom_functions import read_pil_image
+from segmentation_models_pytorch.utils.custom_functions import normalize_0_1
+from segmentation_models_pytorch.utils.custom_functions import read_pil_image
 
 
 class MriDataset(BaseDataset):

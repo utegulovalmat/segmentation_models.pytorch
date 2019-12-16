@@ -32,6 +32,29 @@ def combine_masks(image, mask):
     return masksum, masked
 
 
+def get_train_augmentation_strong(hw_len=512):
+    transform = [
+        A.HorizontalFlip(p=0.5),
+        A.Rotate(limit=15, p=0.5),
+        A.RandomScale(scale_limit=0.10, p=0.5),
+        A.PadIfNeeded(
+            min_height=hw_len,
+            min_width=hw_len,
+            always_apply=True,
+            border_mode=cv2.BORDER_CONSTANT,
+        ),
+        A.GridDistortion(
+            num_steps=5, distort_limit=0.3, interpolation=cv2.INTER_NEAREST
+        ),
+        A.Blur(blur_limit=3),
+        A.GaussNoise(var_limit=0.01),
+        A.ElasticTransform(),
+        A.CoarseDropout(),
+        A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
+    ]
+    return A.Compose(transform, p=1)
+
+
 def get_train_augmentation(hw_len=512):
     transform = [
         A.HorizontalFlip(p=0.5),

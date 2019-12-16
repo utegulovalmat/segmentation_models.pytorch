@@ -28,7 +28,9 @@ from segmentation_models_pytorch.experiments.helpers import save_sample_image
 from segmentation_models_pytorch.experiments.helpers import send_email
 from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
 from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
-from segmentation_models_pytorch.utils.custom_functions import get_train_augmentation
+from segmentation_models_pytorch.utils.custom_functions import (
+    get_train_augmentation_strong,
+)
 from segmentation_models_pytorch.utils.data import MriDataset
 
 plt.rcParams["figure.figsize"] = (7, 7)
@@ -74,9 +76,11 @@ def train_model(
     logger.info("exported_slices_dir_test: " + str(len(files) / 2))
 
     # Define datasets
+    # augmentation = get_train_augmentation()
+    augmentation = get_train_augmentation_strong()
     train_dataset = MriDataset(
         path=exported_slices_dir_train,
-        augmentation=get_train_augmentation(),
+        augmentation=augmentation,
         preprocessing=get_preprocessing(),
     )
     logger.info("test_dataset: " + str(len(train_dataset)))

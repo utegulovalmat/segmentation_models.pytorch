@@ -79,15 +79,18 @@ def num_flat_features(x):
 
 
 def plot_img_array(img_array, ncol=3):
+    # import ipdb; ipdb.set_trace()
     nrow = len(img_array) // ncol
+    print("fig plots", nrow, ncol)
 
     f, plots = plt.subplots(
         nrow, ncol, sharex="all", sharey="all", figsize=(ncol * 4, nrow * 4),
     )
 
-    for i in range(len(img_array)):
-        plots[i // ncol, i % ncol]
-        plots[i // ncol, i % ncol].imshow(img_array[i])
+    for i in range(0, len(img_array), 2):
+        print(ncol, i, "---", i // ncol, i % ncol)
+        plots[i].imshow(img_array[i])
+        plots[i + 1].imshow(img_array[i + 1])
     plt.show()
 
 

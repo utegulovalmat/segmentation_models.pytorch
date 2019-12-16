@@ -1,4 +1,5 @@
 done,model,encoder,axis,epochs,batch
+no,unet,resnet18,0,100,16
 yes,linknet,resnet18,012,100,16
 yes,linknet,resnet34,012,100,8
 yes,linknet,se_resnet50,012,100,4

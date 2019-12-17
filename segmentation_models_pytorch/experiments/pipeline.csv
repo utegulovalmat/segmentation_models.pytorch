@@ -1,4 +1,12 @@
 done,model,encoder,axis,epochs,batch
+no,unet,resnet18,0,100,16
+no,unet,resnet34,0,100,8
+no,unet,resnet50,0,2,8
+no,unet,resnet101,0,100,4
+no,unet,resnet152,0,100,4
+no,unet,dpn98,0,100,4
+no,unet,inceptionresnetv2,0,100,4
+no,unet,inceptionv4,0,100,4
 yes,fpn,resnet18,0,100,16
 yes,fpn,resnet34,0,100,8
 yes,fpn,se_resnet50,0,100,4

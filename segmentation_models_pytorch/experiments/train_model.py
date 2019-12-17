@@ -29,7 +29,7 @@ from segmentation_models_pytorch.experiments.helpers import send_email
 from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
 from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
 from segmentation_models_pytorch.utils.custom_functions import (
-    get_train_augmentation_strong,
+    get_train_augmentation_hardcore,
 )
 from segmentation_models_pytorch.utils.data import MriDataset
 
@@ -76,11 +76,12 @@ def train_model(
     logger.info("exported_slices_dir_test: " + str(len(files) / 2))
 
     # Define datasets
-    # augmentation = get_train_augmentation()
-    augmentation = get_train_augmentation_strong()
+    # augmentation = get_train_augmentation_low()
+    # augmentation = get_train_augmentation_medium()
+    # augmentation = get_train_augmentation_hardcore()
     train_dataset = MriDataset(
         path=exported_slices_dir_train,
-        augmentation=augmentation,
+        augmentation=get_train_augmentation_hardcore(),
         preprocessing=get_preprocessing(),
     )
     logger.info("test_dataset: " + str(len(train_dataset)))
@@ -158,13 +159,9 @@ def train_model(
     ]
     # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    # optimizer = torch.optim.Adam([
-    #     {'params': model.decoder.parameters(), 'lr': 1e-4},
-    #     # decrease lr for encoder in order not to ruin
-    #     # pre-trained weights with large gradients on training start
-    #     {'params': model.encoder.parameters(), 'lr': 1e-6},
-    # ])
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=1e-4, amsgrad=True
+    )  # weight_decay=0.001
 
     # Create DataLoaders
     subset_sampler = SubsetRandomSampler(indices=[150, 160])
@@ -224,7 +221,7 @@ def train_model(
             early_stop_epochs += 1
             logger.info("Early stop epochs = " + str(early_stop_epochs))
             if early_stop_epochs == 3:
-                optimizer.param_groups[0]["lr"] = 1e-5
+                optimizer.param_groups[0]["lr"] = optimizer.param_groups[0]["lr"] / 3
                 new_print("Decrease learning rate to 1e-5")
             if early_stop_epochs == 5:
                 logger.info("Early stopping at epoch: " + str(epoch))
@@ -416,6 +413,7 @@ def main():
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
             send_email(title=title, message=traceback.format_exc())
+        # break
     return 0
 
 

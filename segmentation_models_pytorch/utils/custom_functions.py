@@ -32,17 +32,48 @@ def combine_masks(image, mask):
     return masksum, masked
 
 
-def get_train_augmentation_strong(hw_len=512):
+def get_train_augmentation_hardcore(hw_len=512):
     transform = [
-        A.HorizontalFlip(p=0.5),
-        A.Rotate(limit=15, p=0.5),
-        A.RandomScale(scale_limit=0.10, p=0.5),
+        A.Transpose(p=0.5),
+        A.Flip(p=0.5),
+        A.RandomRotate90(p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.2),
+        A.OneOf([A.IAAAdditiveGaussianNoise(), A.GaussNoise(var_limit=0.01),], p=0.2),
+        A.OneOf(
+            [
+                A.MotionBlur(p=0.2),
+                A.GaussianBlur(blur_limit=3, p=0.1),
+                A.Blur(blur_limit=3, p=0.1),
+            ],
+            p=0.2,
+        ),
+        A.OneOf(
+            [
+                A.GridDistortion(p=0.3),
+                A.OpticalDistortion(p=0.1),
+                A.IAAPiecewiseAffine(p=0.3),
+                A.ElasticTransform(p=0.3),
+            ],
+            p=0.2,
+        ),
+        A.OneOf([A.IAAEmboss(), A.IAASharpen(),], p=0.3),
+        # A.CoarseDropout(),
         A.PadIfNeeded(
             min_height=hw_len,
             min_width=hw_len,
             always_apply=True,
             border_mode=cv2.BORDER_CONSTANT,
         ),
+        A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
+    ]
+    return A.Compose(transform, p=1)
+
+
+def get_train_augmentation_medium(hw_len=512):
+    transform = [
+        A.HorizontalFlip(p=0.5),
+        A.Rotate(limit=15, p=0.5),
+        A.RandomScale(scale_limit=0.10, p=0.5),
         A.GridDistortion(
             num_steps=5, distort_limit=0.3, interpolation=cv2.INTER_NEAREST
         ),
@@ -50,12 +81,18 @@ def get_train_augmentation_strong(hw_len=512):
         A.GaussNoise(var_limit=0.01),
         A.ElasticTransform(),
         A.CoarseDropout(),
+        A.PadIfNeeded(
+            min_height=hw_len,
+            min_width=hw_len,
+            always_apply=True,
+            border_mode=cv2.BORDER_CONSTANT,
+        ),
         A.CenterCrop(height=hw_len, width=hw_len, always_apply=True),
     ]
     return A.Compose(transform, p=1)
 
 
-def get_train_augmentation(hw_len=512):
+def get_train_augmentation_low(hw_len=512):
     transform = [
         A.HorizontalFlip(p=0.5),
         A.Rotate(limit=10, p=0.5),

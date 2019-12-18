@@ -159,9 +159,8 @@ def train_model(
     ]
     # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=1e-4, amsgrad=True
-    )  # weight_decay=0.001
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # weight_decay=0.001
+    # , amsgrad=True
 
     # Create DataLoaders
     subset_sampler = SubsetRandomSampler(indices=[150, 160])

@@ -35,13 +35,13 @@ def combine_masks(image, mask):
 def get_train_augmentation_hardcore(hw_len=512):
     transform = [
         A.HorizontalFlip(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.5),
-        A.OneOf([A.IAAAdditiveGaussianNoise(), A.GaussNoise(var_limit=0.01)], p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=20, p=0.5),
+        A.GaussNoise(var_limit=0.01),
         A.OneOf(
             [
-                A.MotionBlur(blur_limit=4, p=0.3),
-                A.GaussianBlur(blur_limit=4, p=0.3),
-                A.Blur(blur_limit=4, p=0.3),
+                A.MotionBlur(blur_limit=3, p=0.3),
+                A.GaussianBlur(blur_limit=3, p=0.3),
+                A.Blur(blur_limit=3, p=0.3),
             ],
             p=0.5,
         ),
@@ -55,7 +55,6 @@ def get_train_augmentation_hardcore(hw_len=512):
             ],
             p=0.5,
         ),
-        A.OneOf([A.IAAEmboss(), A.IAASharpen()], p=0.3),
         A.ElasticTransform(p=0.5),
         A.PadIfNeeded(
             min_height=hw_len,

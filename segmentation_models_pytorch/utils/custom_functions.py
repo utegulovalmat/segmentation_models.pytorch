@@ -34,30 +34,29 @@ def combine_masks(image, mask):
 
 def get_train_augmentation_hardcore(hw_len=512):
     transform = [
-        A.Transpose(p=0.5),
-        A.Flip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.2),
-        A.OneOf([A.IAAAdditiveGaussianNoise(), A.GaussNoise(var_limit=0.01),], p=0.2),
+        A.HorizontalFlip(p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.5),
+        A.OneOf([A.IAAAdditiveGaussianNoise(), A.GaussNoise(var_limit=0.01)], p=0.5),
         A.OneOf(
             [
-                A.MotionBlur(p=0.2),
-                A.GaussianBlur(blur_limit=3, p=0.1),
-                A.Blur(blur_limit=3, p=0.1),
+                A.MotionBlur(blur_limit=4, p=0.3),
+                A.GaussianBlur(blur_limit=4, p=0.3),
+                A.Blur(blur_limit=4, p=0.3),
             ],
-            p=0.2,
+            p=0.5,
         ),
         A.OneOf(
             [
-                A.GridDistortion(p=0.3),
-                A.OpticalDistortion(p=0.1),
+                A.GridDistortion(
+                    distort_limit=0.3, interpolation=cv2.INTER_NEAREST, p=0.3
+                ),
+                A.OpticalDistortion(p=0.3),
                 A.IAAPiecewiseAffine(p=0.3),
-                A.ElasticTransform(p=0.3),
             ],
-            p=0.2,
+            p=0.5,
         ),
-        A.OneOf([A.IAAEmboss(), A.IAASharpen(),], p=0.3),
-        # A.CoarseDropout(),
+        A.OneOf([A.IAAEmboss(), A.IAASharpen()], p=0.3),
+        A.ElasticTransform(p=0.5),
         A.PadIfNeeded(
             min_height=hw_len,
             min_width=hw_len,
@@ -224,10 +223,11 @@ def read_volume_nifty(filepath):
     pip install nibabel
     import nibabel as nib
     """
-    img = nib.load(filepath)
-    img = nib.as_closest_canonical(img)
-    img_data = img.get_fdata()
-    return img_data
+    # img = nib.load(filepath)
+    # img = nib.as_closest_canonical(img)
+    # img_data = img.get_fdata()
+    # return img_data
+    return
 
 
 def read_pil_image(filepath):

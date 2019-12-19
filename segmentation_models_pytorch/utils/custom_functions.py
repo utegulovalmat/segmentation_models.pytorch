@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import nrrd
 import numpy as np
 from PIL import Image
+import SimpleITK as sitk
 
 ORIENTATION = {"coronal": "COR", "axial": "AXI", "sagital": "SAG"}
 
@@ -474,3 +475,78 @@ def extract_slices_from_volumes(
         print("exported slices dim 2:", slices_cnt_dim_2)
         print("      with mask dim 2:", with_masks_dim_2)
     return True
+
+
+def correct_bias_field(image, mask):
+    inputImage = sitk.ReadImage(image)
+    maskImage = sitk.ReadImage(mask, sitk.sitkUint8)
+    inputImage = sitk.Shrink(inputImage, [int(sys.argv[3])] * inputImage.GetDimension())
+    maskImage = sitk.Shrink(maskImage, [int(sys.argv[3])] * inputImage.GetDimension())
+    corrector = sitk.N4BiasFieldCorrectionImageFilter()
+    numberFittingLevels = 4
+    corrector.SetMaximumNumberOfIterations([int(sys.argv[5])] * numberFittingLevels)
+    output = corrector.Execute(inputImage, maskImage)
+    if "SITK_NOSHOW" not in os.environ:
+        sitk.Show(output, "N4 Corrected")
+
+
+def n4correction(input_img):
+    """
+    :param input_img: numpy array format
+    :return: n4 bias field corrected image with numpy array format
+    """
+    inputImage = sitk.GetImageFromArray(input_img)
+    maskImage = sitk.OtsuThreshold(inputImage, 0, 1, 200)
+
+    inputImage = sitk.Cast(inputImage, sitk.sitkFloat32)
+    corrector = sitk.N4BiasFieldCorrectionImageFilter()
+
+    output = corrector.Execute(inputImage, maskImage)
+    output = sitk.GetArrayFromImage(output)
+
+    sitk.WriteImage(output, "n4corrected")
+
+    return output
+
+
+def zscore_normalize(img, mask=None):
+    """
+    https://github.com/jcreinhold/intensity-normalization/blob/master/intensity_normalization/normalize/zscore.py
+
+    normalize a target image by subtracting the mean of the whole brain
+    and dividing by the standard deviation
+    Args:
+        img (nibabel.nifti1.Nifti1Image): target MR brain image
+        mask (nibabel.nifti1.Nifti1Image): brain mask for img
+    Returns:
+        normalized (nibabel.nifti1.Nifti1Image): img with WM mean at norm_value
+    """
+
+    img_data = img.get_data()
+    if mask is not None and not isinstance(mask, str):
+        mask_data = mask.get_data()
+    elif mask == "nomask":
+        mask_data = img_data == img_data
+    else:
+        mask_data = img_data > img_data.mean()
+    logical_mask = mask_data == 1  # force the mask to be logical type
+    mean = img_data[logical_mask].mean()
+    std = img_data[logical_mask].std()
+    normalized = nib.Nifti1Image((img_data - mean) / std, img.affine, img.header)
+    return normalized
+
+
+# Hausdorff distance calculation
+# import itk
+#
+# tumor=itk.imread('tumor.nrrd')
+# ablation=itk.imread('ablation.nrrd')
+#
+# a2t = itk.DirectedHausdorffDistanceImageFilter.New(ablation,tumor)
+# t2a = itk.DirectedHausdorffDistanceImageFilter.New(tumor,ablation)
+#
+# a2t.Update()
+# t2a.Update()
+#
+# print('Ablation to tumor: %f' % (a2t.GetDirectedHausdorffDistance()))
+# print('Tumor to ablation: %f' % (t2a.GetDirectedHausdorffDistance()))

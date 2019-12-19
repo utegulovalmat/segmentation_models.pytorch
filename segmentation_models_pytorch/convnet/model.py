@@ -13,16 +13,14 @@ class Conv2dReLU(nn.Sequential):
         stride=1,
         use_batchnorm=True,
     ):
-
         super().__init__()
-
         conv = nn.Conv2d(
             in_channels,
             out_channels,
             kernel_size,
             stride=stride,
             padding=padding,
-            bias=not (use_batchnorm),
+            bias=not use_batchnorm,
         )
         relu = nn.ReLU(inplace=True)
 
@@ -35,11 +33,11 @@ class Conv2dReLU(nn.Sequential):
         super(Conv2dReLU, self).__init__(conv, bn, relu)
 
 
-class Convnet(nn.Module):
+class ConvNet(nn.Module):
     def __init__(
         self,
         # encoder_name: str = "resnet34",
-        # encoder_depth: int = 5,
+        encoder_depth: int = 2,
         # encoder_weights: str = "imagenet",
         # decoder_use_batchnorm: bool = True,
         # decoder_channels: List[int] = (256, 128, 64, 32, 16),
@@ -49,27 +47,32 @@ class Convnet(nn.Module):
         # activation: Optional[Union[str, callable]] = None,
         # aux_params: Optional[dict] = None,
     ):
-        super(Convnet, self).__init__()
-
-        self.conv1 = nn.Conv2d(in_channels,)
-
-        self.conv_last = nn.Conv2d(64 + 128 + 256 + 512, classes, 1)
+        super(ConvNet, self).__init__()
+        self.conv1 = Conv2dReLU(
+            in_channels, 64, kernel_size=3, stride=1, padding=1, use_batchnorm=True
+        )
+        self.conv2 = Conv2dReLU(
+            64, 128, kernel_size=3, stride=1, padding=1, use_batchnorm=True
+        )
+        # TODO: encoder_depth more
+        self.conv_last = nn.Conv2d(128, classes, kernel_size=1, stride=1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        x = self.layer1(x)
-        up1 = self.upsample1(x)
-        x = self.layer2(x)
-        up2 = self.upsample2(x)
-        x = self.layer3(x)
-        up3 = self.upsample3(x)
-        x = self.layer4(x)
-        up4 = self.upsample4(x)
-
-        merge = torch.cat([up1, up2, up3, up4], dim=1)
-        merge = self.conv1k(merge)
-        out = self.sigmoid(merge)
-
+        # x = self.conv1(x)
+        # up1 = self.upsample1(x)
+        # x = self.layer2(x)
+        # up2 = self.upsample2(x)
+        # x = self.layer3(x)
+        # up3 = self.upsample3(x)
+        # x = self.layer4(x)
+        # up4 = self.upsample4(x)
+        # merge = torch.cat([up1, up2, up3, up4], dim=1)
+        # merge = self.conv1k(merge)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv_last(x)
+        out = self.sigmoid(x)
         return out
 
     def predict(self, x):

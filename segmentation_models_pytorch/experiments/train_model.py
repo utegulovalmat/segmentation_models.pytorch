@@ -32,6 +32,7 @@ from segmentation_models_pytorch.utils.custom_functions import (
     get_train_augmentation_hardcore,
 )
 from segmentation_models_pytorch.utils.data import MriDataset
+from segmentation_models_pytorch.convnet.model import ConvNet
 
 plt.rcParams["figure.figsize"] = (7, 7)
 warnings.filterwarnings("ignore")
@@ -147,6 +148,8 @@ def train_model(
     elif model_name == "fcn":
         # TODO: add flexibility with encoder selection
         model = smp.FCN(encoder_name=encoder, classes=len(classes),)
+    elif model_name == "convnet":
+        model = ConvNet(classes=len(classes),)
     else:
         raise NoMatchingModelException
 
@@ -220,9 +223,11 @@ def train_model(
             early_stop_epochs += 1
             logger.info("Early stop epochs = " + str(early_stop_epochs))
             if early_stop_epochs == 3:
-                optimizer.param_groups[0]["lr"] = optimizer.param_groups[0]["lr"] / 3
-                new_print("Decrease learning rate to 1e-5")
-            if early_stop_epochs == 5:
+                optimizer.param_groups[0]["lr"] = optimizer.param_groups[0]["lr"] / 10
+                logger.info(
+                    "Decrease learning rate to " + str(optimizer.param_groups[0]["lr"])
+                )
+            if early_stop_epochs == 6:
                 logger.info("Early stopping at epoch: " + str(epoch))
                 break
 

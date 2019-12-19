@@ -1,1 +1,1 @@
-from .model import Convnet
+from .model import ConvNet

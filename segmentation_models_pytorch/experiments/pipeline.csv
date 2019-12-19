@@ -1,4 +1,7 @@
 done,model,encoder,axis,epochs,batch
+no,convnet,resnet18,0,100,8
+no,convnet,resnet18,0,100,16
+no,convnet,resnet18,0,100,32
 yes,fpn,resnet18,0,100,16
 yes,fpn,resnet34,0,100,8
 yes,fpn,se_resnet50,0,100,4

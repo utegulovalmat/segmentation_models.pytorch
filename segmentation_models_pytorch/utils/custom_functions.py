@@ -12,15 +12,6 @@ import SimpleITK as sitk
 ORIENTATION = {"coronal": "COR", "axial": "AXI", "sagital": "SAG"}
 
 
-def zscore_normalize_volume(image):
-    """
-    https://github.com/jcreinhold/intensity-normalization
-    """
-    # import intensity_normalization as inorm
-    # return inorm.normalize.zscore.zscore_normalize(image, mask=None)
-    pass
-
-
 def combine_masks(image, mask):
     """
     Overlay mask layers into single mask
@@ -201,13 +192,15 @@ def remove_all_blacks(image, mask, only_with_target=False):
 
 
 def round_clip_0_1(x):
-    """Remove values gt and lt 0 and 1"""
+    """Remove values gt 1 and lt 0"""
     return x.round().clip(0, 1)
 
 
 def normalize_0_1(x):
-    x_max = np.percentile(x, 99)
-    x_min = np.percentile(x, 1)
+    x_max = np.max(x)
+    x_min = np.min(x)
+    # x_max = np.percentile(x, 99)
+    # x_min = np.percentile(x, 1)
     x = (x - x_min) / (x_max - x_min)
     x = x.clip(0, 1)
     return x
@@ -244,6 +237,39 @@ def read_slices(images, masks):
         mask = np.uint8(read_volume(mask_fn))
         # Remove black slices from all sides
         # image, mask = remove_all_blacks(image, mask, only_with_target=True)
+
+        # N4 bias field correction
+        print(
+            "images before n4correction",
+            image.mean(),
+            image.std(),
+            image.min(),
+            image.max(),
+        )
+        image = n4correction(image, mask)
+        print("images after", image.mean(), image.std(), image.min(), image.max())
+
+        # Z-score normalization
+        print(
+            "images before zscore_normalize",
+            image.mean(),
+            image.std(),
+            image.min(),
+            image.max(),
+        )
+        image = zscore_normalize(image, mask)
+        print("images after", image.mean(), image.std(), image.min(), image.max())
+
+        print(
+            "images before normalize_0_1",
+            image.mean(),
+            image.std(),
+            image.min(),
+            image.max(),
+        )
+        image = normalize_0_1(image)
+        print("images after", image.mean(), image.std(), image.min(), image.max())
+
         _images.append(image)
         _masks.append(mask)
     return _images, _masks
@@ -494,76 +520,54 @@ def set_global_seed(seed: int) -> None:
     np.random.seed(seed)
 
 
-def correct_bias_field(image, mask):
-    inputImage = sitk.ReadImage(image)
-    maskImage = sitk.ReadImage(mask, sitk.sitkUint8)
-    inputImage = sitk.Shrink(inputImage, [int(sys.argv[3])] * inputImage.GetDimension())
-    maskImage = sitk.Shrink(maskImage, [int(sys.argv[3])] * inputImage.GetDimension())
-    corrector = sitk.N4BiasFieldCorrectionImageFilter()
-    numberFittingLevels = 4
-    corrector.SetMaximumNumberOfIterations([int(sys.argv[5])] * numberFittingLevels)
-    output = corrector.Execute(inputImage, maskImage)
-    if "SITK_NOSHOW" not in os.environ:
-        sitk.Show(output, "N4 Corrected")
-
-
-def n4correction(input_img):
+def n4correction(input_img, mask):
     """
     :param input_img: numpy array format
+    :param mask:      numpy array format
     :return: n4 bias field corrected image with numpy array format
     """
-    inputImage = sitk.GetImageFromArray(input_img)
-    maskImage = sitk.OtsuThreshold(inputImage, 0, 1, 200)
-
-    inputImage = sitk.Cast(inputImage, sitk.sitkFloat32)
+    input_image = sitk.GetImageFromArray(input_img)
+    mask_image = sitk.GetImageFromArray(mask)
+    input_image = sitk.Cast(input_image, sitk.sitkFloat32)
+    mask_image = sitk.Cast(mask_image, sitk.sitkUInt8)
     corrector = sitk.N4BiasFieldCorrectionImageFilter()
-
-    output = corrector.Execute(inputImage, maskImage)
+    output = corrector.Execute(input_image, mask_image)
     output = sitk.GetArrayFromImage(output)
-
-    sitk.WriteImage(output, "n4corrected")
-
     return output
 
 
-def zscore_normalize(img, mask=None):
+def zscore_normalize(image, mask):
     """
     https://github.com/jcreinhold/intensity-normalization/blob/master/intensity_normalization/normalize/zscore.py
 
-    normalize a target image by subtracting the mean of the whole brain
+    Normalize a target image by subtracting the mean of the vertebra
     and dividing by the standard deviation
-    Args:
-        img (nibabel.nifti1.Nifti1Image): target MR brain image
-        mask (nibabel.nifti1.Nifti1Image): brain mask for img
-    Returns:
-        normalized (nibabel.nifti1.Nifti1Image): img with WM mean at norm_value
-    """
 
-    img_data = img.get_data()
-    if mask is not None and not isinstance(mask, str):
-        mask_data = mask.get_data()
-    elif mask == "nomask":
-        mask_data = img_data == img_data
-    else:
-        mask_data = img_data > img_data.mean()
-    logical_mask = mask_data == 1  # force the mask to be logical type
-    mean = img_data[logical_mask].mean()
-    std = img_data[logical_mask].std()
-    normalized = nib.Nifti1Image((img_data - mean) / std, img.affine, img.header)
+    Args:
+        image: target volume
+        mask: mask for image
+    Returns:
+        normalized: image with mean at norm_value
+    """
+    logical_mask = mask == 1  # force the mask to be logical type
+    mean = image[logical_mask].mean()
+    std = image[logical_mask].std()
+    normalized = (image - mean) / std
     return normalized
 
 
-# Hausdorff distance calculation
-# import itk
-#
-# tumor=itk.imread('tumor.nrrd')
-# ablation=itk.imread('ablation.nrrd')
-#
-# a2t = itk.DirectedHausdorffDistanceImageFilter.New(ablation,tumor)
-# t2a = itk.DirectedHausdorffDistanceImageFilter.New(tumor,ablation)
-#
-# a2t.Update()
-# t2a.Update()
-#
-# print('Ablation to tumor: %f' % (a2t.GetDirectedHausdorffDistance()))
-# print('Tumor to ablation: %f' % (t2a.GetDirectedHausdorffDistance()))
+def count_hausdorff_distance():
+    # Hausdorff distance calculation
+    import itk
+
+    tumor = itk.imread("tumor.nrrd")
+    ablation = itk.imread("ablation.nrrd")
+
+    a2t = itk.DirectedHausdorffDistanceImageFilter.New(ablation, tumor)
+    t2a = itk.DirectedHausdorffDistanceImageFilter.New(tumor, ablation)
+
+    a2t.Update()
+    t2a.Update()
+
+    print("Ablation to tumor: %f" % (a2t.GetDirectedHausdorffDistance()))
+    print("Tumor to ablation: %f" % (t2a.GetDirectedHausdorffDistance()))

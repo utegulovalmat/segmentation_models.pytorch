@@ -3,7 +3,6 @@ import os
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 
-from segmentation_models_pytorch.utils.custom_functions import normalize_0_1
 from segmentation_models_pytorch.utils.custom_functions import read_pil_image
 
 
@@ -68,16 +67,6 @@ class MriDataset(BaseDataset):
     def load_image(self, image_id):
         image_fn = self.exported_slices_dir + self.image_fns[image_id]
         image = read_pil_image(image_fn)
-
-        # Normalize image
-        # image = normilize_mean_std(image)
-        image = normalize_0_1(image)
-        # Bin values to 0/255 range
-        # image = exposure.equalize_hist(image) # put it 0/255 range
-        # image = exposure.equalize_adapthist(data)
-        # print(np.unique(image), image.min(), image.max())
-        # img.view(width, height, 1).expand(-1, -1, 3)
-        # print(image.shape, image.min(), image.max())
         return image.T
 
     def __len__(self):

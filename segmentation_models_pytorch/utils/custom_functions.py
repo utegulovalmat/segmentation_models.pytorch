@@ -235,40 +235,24 @@ def read_slices(images, masks):
         # Get volume and mask files by filepath
         image = read_volume(image_fn)
         mask = np.uint8(read_volume(mask_fn))
+        mask[mask > 0] = 1
+
         # Remove black slices from all sides
         # image, mask = remove_all_blacks(image, mask, only_with_target=True)
 
         # N4 bias field correction
-        print(
-            "images before n4correction",
-            image.mean(),
-            image.std(),
-            image.min(),
-            image.max(),
-        )
         image = n4correction(image, mask)
-        print("images after", image.mean(), image.std(), image.min(), image.max())
+        # 0 ... 7
+        # images before n4correction 745.6845776952546 470.2227819774101 0 4981
+        # images after               745.62714         470.40427         0.0 5041.2744
+        # 0 1
+        # images before n4correction 745.6845776952546 470.22278 0   4981
+        # images after               718.2532          429.12723 0.0 4265.9404
 
         # Z-score normalization
-        print(
-            "images before zscore_normalize",
-            image.mean(),
-            image.std(),
-            image.min(),
-            image.max(),
-        )
         image = zscore_normalize(image, mask)
-        print("images after", image.mean(), image.std(), image.min(), image.max())
-
-        print(
-            "images before normalize_0_1",
-            image.mean(),
-            image.std(),
-            image.min(),
-            image.max(),
-        )
+        # 0-1
         image = normalize_0_1(image)
-        print("images after", image.mean(), image.std(), image.min(), image.max())
 
         _images.append(image)
         _masks.append(mask)

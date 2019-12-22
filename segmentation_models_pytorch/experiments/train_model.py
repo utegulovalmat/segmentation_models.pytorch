@@ -149,7 +149,7 @@ def train_model(
         # TODO: add flexibility with encoder selection
         model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     elif model_name == "convnet":
-        model = ConvNet(classes=len(classes),)
+        model = ConvNet(size=encoder, classes=len(classes),)
     else:
         raise NoMatchingModelException
 

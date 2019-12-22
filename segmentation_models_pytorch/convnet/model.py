@@ -135,6 +135,7 @@ class ConvNet(nn.Module):
         # bottleneck
         if self.size in ["small64", "large32", "large64"]:
             x = self.conv512(x)
+            x = self.deconv512(x)
 
         x = self.deconv256(x)
         x = self.up(x)  # 128 / 64

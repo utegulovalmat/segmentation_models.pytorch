@@ -28,6 +28,7 @@ from segmentation_models_pytorch.experiments.helpers import save_sample_image
 from segmentation_models_pytorch.experiments.helpers import send_email
 from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
 from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
+from segmentation_models_pytorch.utils.custom_functions import set_global_seed
 from segmentation_models_pytorch.utils.custom_functions import (
     get_train_augmentation_hardcore,
 )
@@ -61,7 +62,7 @@ def train_model(
     :param output_dir: output folder for model predictions
     :param batch_size: batch size
     :param epochs: number of epochs to train
-    :return:
+    :return: (str, dict) results message and dict with metrics
     """
     global logger
     logger.info("input_dir: " + str(input_dir))
@@ -305,6 +306,7 @@ def main():
     results_file = "segmentation_models_pytorch/experiments/results.csv"
     pipline_file = "segmentation_models_pytorch/experiments/pipeline.csv"
     pipeline = pd.read_csv(pipline_file, dtype={"axis": str, "epochs": int},)
+    set_global_seed(42)
 
     # Get arguments
     args = arg_parser().parse_args()
@@ -373,11 +375,12 @@ def main():
             " ".join([str(i) for i in [done, model, encoder, use_axis, epochs, batch]])
         )
         new_print("Extract slices:", extract_slices)
-        new_print("train", train_volumes, train_masks)
-        new_print("valid", valid_volumes, valid_masks)
-        new_print("test", test_volumes, test_masks)
+        new_print("train", get_fns(train_volumes))
+        new_print("valid", get_fns(valid_volumes))
+        new_print("test", get_fns(test_volumes))
         try:
             logger.info("\n\n\nStart training " + output_dir + "\n\n")
+            # message, results = "", {}
             message, results = train_model(
                 model_name=model,
                 encoder=encoder,
@@ -438,6 +441,13 @@ def get_logger(output_dir):
     logger.addHandler(fh)
     logger.addHandler(ch)
     return logger
+
+
+def get_fns(x):
+    r = []
+    for i in x:
+        r.append(i.split("/")[-1])
+    return r
 
 
 if __name__ == "__main__":

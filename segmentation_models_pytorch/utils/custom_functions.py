@@ -1,5 +1,6 @@
 import os
 import cv2
+import random
 import shutil
 import albumentations as A
 import matplotlib.pyplot as plt
@@ -37,7 +38,7 @@ def get_train_augmentation_hardcore(hw_len=512):
     transform = [
         A.HorizontalFlip(p=0.5),
         A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=20, p=0.5),
-        A.GaussNoise(var_limit=0.01),
+        A.GaussNoise(var_limit=0.01, p=0.5),
         A.OneOf(
             [
                 A.MotionBlur(blur_limit=3, p=0.3),
@@ -49,14 +50,13 @@ def get_train_augmentation_hardcore(hw_len=512):
         A.OneOf(
             [
                 A.GridDistortion(
-                    distort_limit=0.3, interpolation=cv2.INTER_NEAREST, p=0.3
+                    distort_limit=0.3, interpolation=cv2.INTER_NEAREST, p=0.5
                 ),
-                A.OpticalDistortion(p=0.3),
-                A.IAAPiecewiseAffine(p=0.3),
+                A.OpticalDistortion(p=0.5),
+                A.ElasticTransform(p=0.5),
             ],
             p=0.5,
         ),
-        A.ElasticTransform(p=0.5),
         A.PadIfNeeded(
             min_height=hw_len,
             min_width=hw_len,
@@ -475,6 +475,23 @@ def extract_slices_from_volumes(
         print("exported slices dim 2:", slices_cnt_dim_2)
         print("      with mask dim 2:", with_masks_dim_2)
     return True
+
+
+def set_global_seed(seed: int) -> None:
+    """
+    Sets random seed into PyTorch, TensorFlow, Numpy and Random.
+    Args:
+        seed: random seed
+    """
+    try:
+        import torch
+    except ImportError:
+        pass
+    else:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    random.seed(seed)
+    np.random.seed(seed)
 
 
 def correct_bias_field(image, mask):

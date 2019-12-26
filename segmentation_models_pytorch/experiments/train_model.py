@@ -1,10 +1,10 @@
-import logging
+import gc
 import os
 import sys
 import traceback
+import logging
 import warnings
-
-import gc
+import adabound
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
@@ -150,7 +150,8 @@ def train_model(
         # TODO: add flexibility with encoder selection
         model = smp.FCN(encoder_name=encoder, classes=len(classes),)
     elif model_name == "convnet":
-        model = ConvNet(size=encoder, classes=len(classes),)
+        size = encoder  # convnet size large/small + 32/64
+        model = ConvNet(size=size, classes=len(classes),)
     else:
         raise NoMatchingModelException
 
@@ -163,8 +164,10 @@ def train_model(
     ]
     # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # weight_decay=0.001
-    # , amsgrad=True
+    # https://www.luolc.com/publications/adabound/
+    optimizer = adabound.AdaBound(model.parameters(), lr=1e-4, final_lr=0.1)
+    # optimizer = torch.optim.Adagrad(model.parameters(), lr=1e-4)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # weight_decay=0.001, amsgrad=True
 
     # Create DataLoaders
     subset_sampler = SubsetRandomSampler(indices=[150, 160])
@@ -411,15 +414,15 @@ def main():
             last_row = save_results(filename=results_file, results=model_results)
             message += "<br>" + str(last_row.to_list())
             logger.info("Send email")
-            print(message)
-            send_email(title=title, message=message)
         except Exception as e:
             logger.error("Exception")
             logger.error(str(e))
             logger.error(traceback.format_exc())
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
-            send_email(title=title, message=traceback.format_exc())
+            message = traceback.format_exc()
+        print(message)
+        send_email(title=title, message=message)
         # break
     return 0
 

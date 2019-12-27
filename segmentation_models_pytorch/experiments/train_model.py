@@ -8,6 +8,7 @@ import adabound
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
@@ -155,6 +156,14 @@ def train_model(
     else:
         raise NoMatchingModelException
 
+    # Note: this will init kernels with random values
+    # for m in model.modules():
+    #     if isinstance(m, nn.Conv2d):
+    #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    #     elif isinstance(m, nn.BatchNorm2d):
+    #         nn.init.constant_(m.weight, 1)
+    #         nn.init.constant_(m.bias, 0)
+
     # Define metrics, loss and optimizer
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
@@ -165,7 +174,7 @@ def train_model(
     # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
     # https://www.luolc.com/publications/adabound/
-    optimizer = adabound.AdaBound(model.parameters(), lr=1e-4, final_lr=0.1)
+    optimizer = adabound.AdaBound(model.parameters(), lr=1e-4, final_lr=1e-5)
     # optimizer = torch.optim.Adagrad(model.parameters(), lr=1e-4)
     # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # weight_decay=0.001, amsgrad=True
 
@@ -226,12 +235,12 @@ def train_model(
         else:
             early_stop_epochs += 1
             logger.info("Early stop epochs = " + str(early_stop_epochs))
-            if early_stop_epochs == 3:
-                optimizer.param_groups[0]["lr"] = optimizer.param_groups[0]["lr"] / 10
+            if early_stop_epochs == 5:
+                optimizer.param_groups[0]["lr"] = optimizer.param_groups[0]["lr"] / 3
                 logger.info(
                     "Decrease learning rate to " + str(optimizer.param_groups[0]["lr"])
                 )
-            if early_stop_epochs == 6:
+            if early_stop_epochs == 15:
                 logger.info("Early stopping at epoch: " + str(epoch))
                 break
 
@@ -264,6 +273,10 @@ def train_model(
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor)
         pr_mask = pr_mask.squeeze().cpu().numpy().round()
+
+        # TODO: count dice per slice
+        # TODO: smp.utils.custom_functions.plot_masks
+
         overlay_prediction = image[0] * pr_mask
         smp.utils.custom_functions.visualize(
             output_path=output_dir + "/" + str(idx) + ".png",
@@ -383,6 +396,7 @@ def main():
         new_print("test", get_fns(test_volumes))
         try:
             logger.info("\n\n\nStart training " + output_dir + "\n\n")
+
             # message, results = "", {}
             message, results = train_model(
                 model_name=model,
@@ -392,6 +406,7 @@ def main():
                 input_dir=input_dir,
                 batch_size=batch,
             )
+
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 gc.collect()

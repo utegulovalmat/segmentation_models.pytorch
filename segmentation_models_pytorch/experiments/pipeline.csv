@@ -1,4 +1,5 @@
 done,model,encoder,axis,epochs,batch
+no,convnet,gen4,0,100,8
 yes,fpn,resnet34,0,100,8
 yes,fpn,resnet50,0,100,8
 yes,fpn,se_resnet50,0,100,4
@@ -13,10 +14,6 @@ yes,unet,inceptionv4,0,100,8
 yes,unet,densenet121,0,100,4
 yes,unet,densenet169,0,100,4
 yes,unet,mobilenet_v2,0,100,4
-yes,convnet,small32,0,100,8
-yes,convnet,small64,0,100,8
-yes,convnet,large32,0,100,8
-yes,convnet,large64,0,100,8
 yes,fpn,resnet50,0,100,8
 yes,fpn,xception,0,100,8
 yes,fpn,inceptionv4,0,100,8

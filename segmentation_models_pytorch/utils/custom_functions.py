@@ -148,6 +148,19 @@ def visualize(output_path, **images):
     plt.savefig(fname=output_path)
 
 
+def plot_masks(output_path, **images):
+    n = len(images)
+    plt.figure(figsize=(16, 5))
+    for idx, (name, image) in enumerate(images.items()):
+        plt.subplot(1, n, idx + 1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.title(" ".join(name.split("_")).title())
+        plt.imshow(image)
+    # plt.show()
+    plt.savefig(fname=output_path)
+
+
 def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION["coronal"]):
     """Return rotated matrix to get differnt views ralative to submited 3D volumes"""
     if orientation == ORIENTATION["coronal"]:
@@ -500,8 +513,11 @@ def set_global_seed(seed: int) -> None:
     else:
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+        torch.set_printoptions(precision=10)
     random.seed(seed)
     np.random.seed(seed)
+    # cudnn.benchmark = False
+    # cudnn.deterministic = True
 
 
 def n4correction(input_img, mask):

@@ -53,6 +53,8 @@ def run_inference():
         # TODO: Run model inference on exported dataset
         # model = load_model(model_path)
 
+        # smp.utils.custom_functions.plot_masks
+
         # Export to PNG to view exported slices
         images, masks = get_slices_paths(exported_slices_dir)
         exported_slices_dir_png = exported_slices_dir + "png/"

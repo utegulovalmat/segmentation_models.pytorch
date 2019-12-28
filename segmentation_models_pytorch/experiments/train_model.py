@@ -157,12 +157,12 @@ def train_model(
         raise NoMatchingModelException
 
     # Note: this will init kernels with random values
-    # for m in model.modules():
-    #     if isinstance(m, nn.Conv2d):
-    #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-    #     elif isinstance(m, nn.BatchNorm2d):
-    #         nn.init.constant_(m.weight, 1)
-    #         nn.init.constant_(m.bias, 0)
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
 
     # Define metrics, loss and optimizer
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
@@ -174,9 +174,11 @@ def train_model(
     # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
     # https://www.luolc.com/publications/adabound/
-    optimizer = adabound.AdaBound(model.parameters(), lr=1e-4, final_lr=1e-5)
+    # optimizer = adabound.AdaBound(model.parameters(), lr=1e-4, final_lr=1e-5)
     # optimizer = torch.optim.Adagrad(model.parameters(), lr=1e-4)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # weight_decay=0.001, amsgrad=True
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=1e-4
+    )  # weight_decay=0.001, amsgrad=True
 
     # Create DataLoaders
     subset_sampler = SubsetRandomSampler(indices=[150, 160])

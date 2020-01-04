@@ -20,10 +20,10 @@ from segmentation_models_pytorch.experiments.helpers import format_history
 from segmentation_models_pytorch.experiments.helpers import format_metrics
 from segmentation_models_pytorch.experiments.helpers import get_best_metrics
 from segmentation_models_pytorch.experiments.helpers import get_datetime_str
-from segmentation_models_pytorch.experiments.helpers import get_overlay_masks
 from segmentation_models_pytorch.experiments.helpers import get_volume_fn_from_mask_fn
 from segmentation_models_pytorch.experiments.helpers import get_volume_paths
 from segmentation_models_pytorch.experiments.helpers import plot_graphs
+from segmentation_models_pytorch.experiments.helpers import plot_metrics_per_slice
 from segmentation_models_pytorch.experiments.helpers import save_results
 from segmentation_models_pytorch.experiments.helpers import save_sample_image
 from segmentation_models_pytorch.experiments.helpers import send_email
@@ -171,7 +171,6 @@ def train_model(
         smp.utils.metrics.IoU(eps=1.0),
         smp.utils.metrics.Fscore(eps=1.0),
     ]
-    # TODO: try BCEDiceLoss
     loss = smp.utils.losses.DiceLoss(eps=1.0)
     # https://www.luolc.com/publications/adabound/
     # optimizer = adabound.AdaBound(model.parameters(), lr=1e-4, final_lr=1e-5)
@@ -269,25 +268,39 @@ def train_model(
     logger.info(best_test_row)
 
     # Visualize predictions
+    metric_iou = []
+    metric_dice = []
     for idx in range(0, len(test_dataset), 10):
         image, gt_mask = test_dataset[idx]
-        gt_mask = gt_mask.squeeze()
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor)
-        pr_mask = pr_mask.squeeze().cpu().numpy().round()
+        gt_mask = torch.from_numpy(gt_mask)
 
-        # TODO: count dice per slice
-        # TODO: smp.utils.custom_functions.plot_masks
+        iou = metrics[0](pr_mask, gt_mask).cpu().detach().numpy()
+        dice = metrics[1](pr_mask, gt_mask).cpu().detach().numpy()
+        metric_iou.append(iou)
+        metric_dice.append(dice)
 
-        overlay_prediction = image[0] * pr_mask
+        gt_mask = gt_mask.squeeze()
+        pr_mask = pr_mask.squeeze().cpu().numpy()
+        pr_mask = pr_mask.round()  # TODO: use threshold?
+
+        smp.utils.custom_functions.plot_masks(
+            output_path=output_dir + "/masks-" + str(idx) + ".png",
+            image=image[0],
+            gt_mask=gt_mask,
+            pr_mask=pr_mask,
+        )
+
         smp.utils.custom_functions.visualize(
             output_path=output_dir + "/" + str(idx) + ".png",
             image=image[0],
             gt_mask=gt_mask,
             pr_mask=pr_mask,
-            overlay_prediction=overlay_prediction,
-            overlay_masks=get_overlay_masks(gt_mask, pr_mask),
         )
+
+    # count metrics per slice
+    plot_metrics_per_slice(metric_dice, metric_iou, output_dir)
 
     results = combine_results(train_metrics, valid_metrics, test_metrics)
     message = "Model: <strong>" + model_name + "-" + encoder + "</strong><br>"
@@ -295,6 +308,8 @@ def train_model(
     message += "Train<br>\n" + best_train_row + "\n<br>"
     message += "Valid<br>\n" + best_valid_row + "\n<br>"
     message += "Test<br>\n" + best_test_row + "\n<br>"
+    message += "Metrics per slice Dice<br>\n" + str(list(metric_dice)) + "\n<br>"
+    message += "Metrics per slice IoU<br>\n" + str(list(metric_iou)) + "\n<br>"
     return message, results
 
 
@@ -354,6 +369,7 @@ def main():
         "test": exported_slices_dir_test,
     }
     if extract_slices:
+        print(get_datetime_str(), "train", train_volumes, train_masks)
         smp.utils.custom_functions.extract_slices_from_volumes(
             images=train_volumes,
             masks=train_masks,
@@ -361,7 +377,7 @@ def main():
             skip_empty_mask=True,
             use_dimensions=use_axis,
         )
-        print("train", train_volumes, train_masks)
+        print(get_datetime_str(), "valid", valid_volumes, valid_masks)
         smp.utils.custom_functions.extract_slices_from_volumes(
             images=valid_volumes,
             masks=valid_masks,
@@ -369,15 +385,14 @@ def main():
             skip_empty_mask=True,
             use_dimensions=use_axis,
         )
-        print("valid", valid_volumes, valid_masks)
+        print(get_datetime_str(), "test", test_volumes, test_masks)
         smp.utils.custom_functions.extract_slices_from_volumes(
             images=test_volumes,
             masks=test_masks,
             output_dir=exported_slices_dir_test,
-            skip_empty_mask=True,
+            skip_empty_mask=False,
             use_dimensions=use_axis,
         )
-        print("test", test_volumes, test_masks)
 
     for idx, (done, model, encoder, _axis, epochs, batch) in pipeline.iterrows():
         if done == "yes":

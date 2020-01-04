@@ -28,7 +28,7 @@ def get_volume_paths(input_dir: str):
     for dirname, _, filenames in os.walk(input_dir):
         for filename in filenames:
             if "nrrd" in filename and "seg" not in filename:
-                if "label.nrrd" in filename:
+                if "label.nrrd" in filename or "-label-corr.nrrd" in filename:
                     mask_fns.append(os.path.join(dirname, filename))
                 else:
                     fns.append(os.path.join(dirname, filename))
@@ -155,6 +155,24 @@ def combine_results(train_metrics, valid_metrics, test_metrics):
     }
 
 
+def plot_metrics_per_slice(dice, iou, output_dir):
+    plt.figure(figsize=(10, 5))
+    plt.subplot(121)
+    plt.bar(x=[i for i in range(5, 5 + len(dice))], height=dice, width=0.8)
+    plt.title("Dice per slice")
+    plt.ylabel("%")
+    plt.xlabel("slice idx")
+
+    plt.subplot(122)
+    plt.bar(x=[i for i in range(5, 5 + len(iou))], height=iou, width=0.8)
+
+    plt.title("IoU per slice")
+    plt.ylabel("%")
+    plt.xlabel("slice idx")
+    # plt.show()
+    plt.savefig(output_dir + "/metrics_per_slice.png")
+
+
 def plot_graphs(history, output_dir):
     print("plot_graphs", history["iou_score"])
     print("plot_graphs", history["val_iou_score"])
@@ -196,13 +214,6 @@ def get_datetime_str():
     date = now.strftime("%Y-%m-%d")
     time = now.strftime("%H-%M-%S")
     return date + "-" + time
-
-
-def get_overlay_masks(gt_mask, pr_mask):
-    # FIX: this doesn't show 2 overlay masks
-    pr_mask[pr_mask > 0.5] = 1
-    mask = gt_mask * pr_mask
-    return mask
 
 
 def arg_parser():

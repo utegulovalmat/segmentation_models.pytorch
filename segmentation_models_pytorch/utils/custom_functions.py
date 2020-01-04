@@ -28,13 +28,15 @@ def combine_masks(image, mask):
 def get_train_augmentation_hardcore(hw_len=512):
     transform = [
         A.HorizontalFlip(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=20, p=0.5),
-        A.GaussNoise(var_limit=0.01, p=0.5),
+        A.ShiftScaleRotate(
+            shift_limit=0.0625, scale_limit=0.05, rotate_limit=15, p=0.5
+        ),
         A.OneOf(
             [
-                A.MotionBlur(blur_limit=3, p=0.3),
-                A.GaussianBlur(blur_limit=3, p=0.3),
-                A.Blur(blur_limit=3, p=0.3),
+                A.GaussNoise(var_limit=0.01, p=0.5),
+                A.MotionBlur(blur_limit=3, p=0.5),
+                A.GaussianBlur(blur_limit=3, p=0.5),
+                A.Blur(blur_limit=3, p=0.5),
             ],
             p=0.5,
         ),
@@ -148,15 +150,19 @@ def visualize(output_path, **images):
     plt.savefig(fname=output_path)
 
 
-def plot_masks(output_path, **images):
-    n = len(images)
-    plt.figure(figsize=(16, 5))
-    for idx, (name, image) in enumerate(images.items()):
-        plt.subplot(1, n, idx + 1)
-        plt.xticks([])
-        plt.yticks([])
-        plt.title(" ".join(name.split("_")).title())
-        plt.imshow(image)
+def plot_masks(output_path, image, gt_mask, pr_mask):
+    cmaps = ["gray", "Set1", "Set2"]
+    f, ax = plt.subplots(1, 1, figsize=(10, 10))
+
+    gt_mask = np.ma.masked_where(gt_mask == 0, gt_mask)
+    pr_mask = np.ma.masked_where(pr_mask == 0, pr_mask)
+
+    plt.imshow(image, alpha=1, cmap=cmaps[0])
+    plt.imshow(gt_mask, alpha=0.5, cmap=cmaps[1])
+    plt.imshow(pr_mask, alpha=0.5, cmap=cmaps[2])
+
+    plt.axis("off")
+    f.tight_layout()
     # plt.show()
     plt.savefig(fname=output_path)
 
@@ -254,7 +260,8 @@ def read_slices(images, masks):
         # image, mask = remove_all_blacks(image, mask, only_with_target=True)
 
         # N4 bias field correction
-        image = n4correction(image, mask)
+        # TODO: corrected volumes are exported to dataset_n4 folder
+        # image = n4correction(image, mask, image_fn, mask_fn)
         # 0 ... 7
         # images before n4correction 745.6845776952546 470.2227819774101 0 4981
         # images after               745.62714         470.40427         0.0 5041.2744
@@ -414,6 +421,7 @@ def extract_slices_from_volumes(
     image_volumes, mask_volumes = read_slices(images, masks)
     volume_shapes = [i.shape for i in image_volumes]
     print("volumes shapes", volume_shapes)
+    print("skip empty masks", skip_empty_mask)
 
     # Export slices from dimension 0
     slices_cnt_dim_0 = sum([x for x, y, z in volume_shapes])
@@ -520,20 +528,27 @@ def set_global_seed(seed: int) -> None:
     # cudnn.deterministic = True
 
 
-def n4correction(input_img, mask):
+def n4correction(input_img, mask, image_fn, mask_fn):
     """
     :param input_img: numpy array format
-    :param mask:      numpy array format
+    :param mask: numpy array format
+    :param image_fn: path to image volume
+    :param mask_fn: path to mask volume
     :return: n4 bias field corrected image with numpy array format
+
     """
     input_image = sitk.GetImageFromArray(input_img)
     mask_image = sitk.GetImageFromArray(mask)
     input_image = sitk.Cast(input_image, sitk.sitkFloat32)
     mask_image = sitk.Cast(mask_image, sitk.sitkUInt8)
     corrector = sitk.N4BiasFieldCorrectionImageFilter()
-    output = corrector.Execute(input_image, mask_image)
-    output = sitk.GetArrayFromImage(output)
-    return output
+    image_corrected = corrector.Execute(input_image, mask_image)
+    image_corrected = sitk.GetArrayFromImage(image_corrected)
+    image_fn = image_fn.split(".")[0]
+    mask_fn = mask_fn.split(".")[0]
+    nrrd.write(image_fn + "-corr.nrrd", image_corrected)
+    nrrd.write(mask_fn + "-seg-corr.nrrd", mask)
+    return image_corrected
 
 
 def zscore_normalize(image, mask):

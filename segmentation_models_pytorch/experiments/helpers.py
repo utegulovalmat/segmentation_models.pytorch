@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.convnet.model import ConvNet
 
 plt.rcParams["figure.figsize"] = (7, 7)
 
@@ -156,21 +158,25 @@ def combine_results(train_metrics, valid_metrics, test_metrics):
 
 
 def plot_metrics_per_slice(dice, iou, output_dir):
+    # import seaborn as sns
+    # dice = list(zip([i for i in range(0, len(dice))], dice))
+    # sns.barplot(x="Slice index", y="DSC, %", data=dice)
+
     plt.figure(figsize=(10, 5))
-    plt.subplot(121)
-    plt.bar(x=[i for i in range(5, 5 + len(dice))], height=dice, width=0.8)
-    plt.title("Dice per slice")
+    plt.bar(x=[i for i in range(0, len(dice))], height=dice, width=0.3)
+    plt.title("DSC per slice")
     plt.ylabel("%")
-    plt.xlabel("slice idx")
+    plt.xlabel("number of slice")
+    plt.savefig(output_dir + "/dice_per_slice.png")
+    # plt.close()
 
-    plt.subplot(122)
-    plt.bar(x=[i for i in range(5, 5 + len(iou))], height=iou, width=0.8)
-
+    plt.figure(figsize=(10, 5))
+    plt.bar(x=[i for i in range(0, len(iou))], height=iou, width=0.3)
     plt.title("IoU per slice")
     plt.ylabel("%")
-    plt.xlabel("slice idx")
-    # plt.show()
-    plt.savefig(output_dir + "/metrics_per_slice.png")
+    plt.xlabel("number of slice")
+    plt.savefig(output_dir + "/iou_per_slice.png")
+    plt.close()
 
 
 def plot_graphs(history, output_dir):
@@ -295,3 +301,49 @@ def send_email(title, message):
         print(response.headers)
     except Exception as e:
         print(str(e))
+
+
+def get_model_by_name(
+    model_name, encoder, encoder_weights=None, classes=None, activation=None
+):
+    if model_name == "unet":
+        model = smp.Unet(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "fpn":
+        model = smp.FPN(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "linknet":
+        model = smp.Linknet(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "pspnet":
+        model = smp.PSPNet(
+            encoder_name=encoder,
+            encoder_weights=encoder_weights,
+            classes=len(classes),
+            activation=activation,
+            in_channels=1,
+        )
+    elif model_name == "fcn":
+        # TODO: add flexibility with encoder selection
+        model = smp.FCN(encoder_name=encoder, classes=len(classes),)
+    elif model_name == "convnet":
+        size = encoder  # convnet size large/small + 32/64
+        model = ConvNet(size=size, classes=len(classes),)
+    else:
+        raise NoMatchingModelException
+    return model

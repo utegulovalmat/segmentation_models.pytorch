@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
 import segmentation_models_pytorch as smp
-from segmentation_models_pytorch.experiments.helpers import NoMatchingModelException
+from segmentation_models_pytorch.experiments.helpers import get_model_by_name
 from segmentation_models_pytorch.experiments.helpers import arg_parser
 from segmentation_models_pytorch.experiments.helpers import combine_results
 from segmentation_models_pytorch.experiments.helpers import format_history
@@ -34,7 +34,6 @@ from segmentation_models_pytorch.utils.custom_functions import (
     get_train_augmentation_hardcore,
 )
 from segmentation_models_pytorch.utils.data import MriDataset
-from segmentation_models_pytorch.convnet.model import ConvNet
 
 plt.rcParams["figure.figsize"] = (7, 7)
 warnings.filterwarnings("ignore")
@@ -114,59 +113,23 @@ def train_model(
     logger.info("Use device: " + device)
     activation = "sigmoid" if len(classes) == 1 else "softmax"
     logger.info("Activation: " + activation)
-    encoder_weights = "imagenet"
-    if model_name == "unet":
-        model = smp.Unet(
-            encoder_name=encoder,
-            encoder_weights=encoder_weights,
-            classes=len(classes),
-            activation=activation,
-            in_channels=1,
-        )
-    elif model_name == "fpn":
-        model = smp.FPN(
-            encoder_name=encoder,
-            encoder_weights=encoder_weights,
-            classes=len(classes),
-            activation=activation,
-            in_channels=1,
-        )
-    elif model_name == "linknet":
-        model = smp.Linknet(
-            encoder_name=encoder,
-            encoder_weights=encoder_weights,
-            classes=len(classes),
-            activation=activation,
-            in_channels=1,
-        )
-    elif model_name == "pspnet":
-        model = smp.PSPNet(
-            encoder_name=encoder,
-            encoder_weights=encoder_weights,
-            classes=len(classes),
-            activation=activation,
-            in_channels=1,
-        )
-    elif model_name == "fcn":
-        # TODO: add flexibility with encoder selection
-        model = smp.FCN(encoder_name=encoder, classes=len(classes),)
-    elif model_name == "convnet":
-        size = encoder  # convnet size large/small + 32/64
-        model = ConvNet(size=size, classes=len(classes),)
-    else:
-        raise NoMatchingModelException
+    model = get_model_by_name(
+        model_name,
+        encoder,
+        encoder_weights="imagenet",
+        classes=classes,
+        activation=activation,
+    )
 
     # Note: this will init kernels with random values
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-        elif isinstance(m, nn.BatchNorm2d):
-            nn.init.constant_(m.weight, 1)
-            nn.init.constant_(m.bias, 0)
+    # for m in model.modules():
+    #     if isinstance(m, nn.Conv2d):
+    #         nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+    #     elif isinstance(m, nn.BatchNorm2d):
+    #         nn.init.constant_(m.weight, 1)
+    #         nn.init.constant_(m.bias, 0)
 
     # Define metrics, loss and optimizer
-    # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-    # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
     metrics = [
         smp.utils.metrics.IoU(eps=1.0),
         smp.utils.metrics.Fscore(eps=1.0),
@@ -215,6 +178,7 @@ def train_model(
         model, loss=loss, metrics=metrics, device=device, verbose=True,
     )
 
+    best_model_fn = "/" + model_name + "-" + encoder + ".pth"
     max_score = 0
     best_epoch = 0
     train_history = []
@@ -229,7 +193,7 @@ def train_model(
 
         if max_score < valid_logs["iou_score"]:
             max_score = valid_logs["iou_score"]
-            torch.save(model, output_dir + "/best_model.pth")
+            torch.save(model, output_dir + best_model_fn)
             logger.info("Model saved at epoch: " + str(epoch))
             best_epoch = epoch
             early_stop_epochs = 0
@@ -257,7 +221,7 @@ def train_model(
     logger.info(best_valid_row)
 
     # Evaluate model on test set, load best saved checkpoint
-    model = torch.load(output_dir + "/best_model.pth")
+    model = torch.load(output_dir + best_model_fn)
     test_epoch = smp.utils.train.ValidEpoch(
         model, loss=loss, metrics=metrics, device=device, verbose=True
     )
@@ -270,11 +234,18 @@ def train_model(
     # Visualize predictions
     metric_iou = []
     metric_dice = []
-    for idx in range(0, len(test_dataset), 10):
+    image_volume = []
+    gt_volume = []
+    pr_volume = []
+    for idx in range(130, len(test_dataset) - 100, 1):
         image, gt_mask = test_dataset[idx]
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor)
         gt_mask = torch.from_numpy(gt_mask)
+
+        image_volume.append(image)
+        gt_volume.append(gt_mask)
+        pr_volume.append(pr_mask)
 
         iou = metrics[0](pr_mask, gt_mask).cpu().detach().numpy()
         dice = metrics[1](pr_mask, gt_mask).cpu().detach().numpy()
@@ -283,21 +254,20 @@ def train_model(
 
         gt_mask = gt_mask.squeeze()
         pr_mask = pr_mask.squeeze().cpu().numpy()
-        pr_mask = pr_mask.round()  # TODO: use threshold?
+        pr_mask = pr_mask.round()  # use threshold?
 
-        smp.utils.custom_functions.plot_masks(
+        smp.utils.custom_functions.plot_masks_overlay(
             output_path=output_dir + "/masks-" + str(idx) + ".png",
             image=image[0],
             gt_mask=gt_mask,
             pr_mask=pr_mask,
         )
 
-        smp.utils.custom_functions.visualize(
-            output_path=output_dir + "/" + str(idx) + ".png",
-            image=image[0],
-            gt_mask=gt_mask,
-            pr_mask=pr_mask,
-        )
+        # smp.utils.custom_functions.visualize(
+        #     output_path=output_dir + "/" + str(idx) + ".png",
+        #     gt_mask=gt_mask,
+        #     pr_mask=pr_mask,
+        # )
 
     # count metrics per slice
     plot_metrics_per_slice(metric_dice, metric_iou, output_dir)

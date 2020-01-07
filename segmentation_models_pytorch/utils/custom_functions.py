@@ -8,6 +8,7 @@ import nrrd
 import numpy as np
 from PIL import Image
 import SimpleITK as sitk
+from skimage import morphology
 
 ORIENTATION = {"coronal": "COR", "axial": "AXI", "sagital": "SAG"}
 
@@ -139,32 +140,47 @@ def visualize(output_path, **images):
     """Plot images in one row.
     Helper function for data visualization"""
     n = len(images)
-    plt.figure(figsize=(16, 5))
+    plt.figure(figsize=(10, 5))
     for idx, (name, image) in enumerate(images.items()):
+        image = np.ma.masked_where(image == 0, image)
         plt.subplot(1, n, idx + 1)
         plt.xticks([])
         plt.yticks([])
         plt.title(" ".join(name.split("_")).title())
-        plt.imshow(image)
+        plt.imshow(image, alpha=0.5)
+    # plt.axis("off")
     # plt.show()
     plt.savefig(fname=output_path)
+    plt.close()
 
 
-def plot_masks(output_path, image, gt_mask, pr_mask):
-    cmaps = ["gray", "Set1", "Set2"]
+def plot_masks_overlay(output_path, image, gt_mask, pr_mask):
+    cmaps = ["gray", "Set2", "Dark2"]
     f, ax = plt.subplots(1, 1, figsize=(10, 10))
 
     gt_mask = np.ma.masked_where(gt_mask == 0, gt_mask)
+    countour = np.logical_xor(gt_mask, morphology.binary_erosion(gt_mask))
+    image[countour > 0] = 1
+
+    orig_pr_mask = pr_mask.copy()
+    orig_pr_mask = np.ma.masked_where(orig_pr_mask == 0, orig_pr_mask)
+
+    pr_mask[pr_mask == 1] = 2
     pr_mask = np.ma.masked_where(pr_mask == 0, pr_mask)
+    pr_countour = np.logical_xor(pr_mask, morphology.binary_erosion(pr_mask))
+    pr_mask[pr_countour > 0] = 1
+    pr_mask[pr_mask == 2] = np.nan
 
     plt.imshow(image, alpha=1, cmap=cmaps[0])
-    plt.imshow(gt_mask, alpha=0.5, cmap=cmaps[1])
-    plt.imshow(pr_mask, alpha=0.5, cmap=cmaps[2])
+    # plt.imshow(gt_mask, alpha=0.5, cmap=cmaps[1])
+    plt.imshow(orig_pr_mask, alpha=0.3, cmap=cmaps[1])
+    plt.imshow(pr_mask, alpha=1, cmap=cmaps[1])
 
     plt.axis("off")
     f.tight_layout()
     # plt.show()
     plt.savefig(fname=output_path)
+    plt.close(f)
 
 
 def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION["coronal"]):
@@ -526,6 +542,12 @@ def set_global_seed(seed: int) -> None:
     np.random.seed(seed)
     # cudnn.benchmark = False
     # cudnn.deterministic = True
+
+
+def export_slices_to_volume(fn, slices, shape):
+    # volume = np.dstack(slices)
+    volume = np.stack(slices)
+    nrrd.write(fn + "-corr.nrrd", volume)
 
 
 def n4correction(input_img, mask, image_fn, mask_fn):

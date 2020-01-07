@@ -1,13 +1,19 @@
+"""
+    python -m segmentation_models_pytorch.experiments.inference
+"""
 import argparse
 import os
+import shutil
 
 import matplotlib.pyplot as plt
+import torch
 
 import segmentation_models_pytorch as smp
-from segmentation_models_pytorch.experiments.helpers import get_volume_fn_from_mask_fn
-from segmentation_models_pytorch.experiments.helpers import get_volume_paths
-from segmentation_models_pytorch.utils.custom_functions import read_pil_image
-from segmentation_models_pytorch.utils.custom_functions import normalize_0_1
+from segmentation_models_pytorch.experiments.helpers import plot_metrics_per_slice
+from segmentation_models_pytorch.experiments.helpers import get_datetime_str
+from segmentation_models_pytorch.utils.data import MriDataset
+from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
+from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
 
 
 def export_volume_to_dir(
@@ -23,50 +29,83 @@ def export_volume_to_dir(
     )
 
 
-def load_model(model_path):
-    pass
-
-
 def run_inference():
-    args = inference_arg_parser().parse_args()
-    input_dir = args.input_dir
+    # args = inference_arg_parser().parse_args()
+    # input_dir = args.input_dir
 
-    # Get paths to volumes and masks
-    mask_fns, fns = get_volume_paths(input_dir)
-    n_volumes = 1  # 14 or 1
-    masks = mask_fns[0:n_volumes]
-    volumes = [get_volume_fn_from_mask_fn(fn) for fn in masks]
+    input_dir = "/home/a/Thesis/datasets/mri/"
+    model_dir = "segmentation_models_pytorch/experiments/"
+    model_name = "unet"
+    # encoder = "resnet34"
+    encoder = "resnext50_32x4"
 
-    for volume, mask in zip(volumes, masks):
-        dataset_dir = "/".join(input_dir.split("/")[:-1])
-        patient = volume.split("/")[-1]
-        patient = patient.split(".")[0]
-        exported_slices_dir = dataset_dir + "/" + patient + "/"
-        export_volume_to_dir(
-            patient=exported_slices_dir,
-            volume=volume,
-            mask=mask,
-            use_axis="0",  # 012
-            skip_empty_mask=True,
+    output_dir = model_dir + model_name + "-" + encoder + "/"
+
+    if os.path.isdir(output_dir):
+        print("rmtree before extracting slices:", output_dir)
+        shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
+
+    exported_slices_dir_test = input_dir + "/tif_slices_test/"
+    test_dataset = MriDataset(
+        path=exported_slices_dir_test,
+        augmentation=get_test_augmentation(),
+        preprocessing=get_preprocessing(),
+    )
+    print("test_dataset: " + str(len(test_dataset)))
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = torch.load(
+        model_dir + model_name + "-" + encoder + ".pth",
+        map_location=torch.device(device),
+    )
+
+    metrics = [
+        smp.utils.metrics.IoU(eps=1.0),
+        smp.utils.metrics.Fscore(eps=1.0),
+    ]
+    metric_iou = []
+    metric_dice = []
+    image_volume = []
+    gt_volume = []
+    pr_volume = []
+    print("time start", get_datetime_str())
+
+    for idx in range(150, len(test_dataset) - 200, 50):
+        # for idx in range(130, len(test_dataset) - 100, 1):
+        # for idx in range(130, len(test_dataset) - 100, 2):
+        # for idx in range(0, len(test_dataset), 1):
+        image, gt_mask = test_dataset[idx]
+        x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
+        pr_mask = model.predict(x_tensor)
+        gt_mask = torch.from_numpy(gt_mask)
+
+        image_volume.append(image)
+        gt_volume.append(gt_mask)
+        pr_volume.append(pr_mask)
+
+        iou = metrics[0](pr_mask, gt_mask).cpu().detach().numpy()
+        dice = metrics[1](pr_mask, gt_mask).cpu().detach().numpy()
+        metric_iou.append(iou)
+        metric_dice.append(dice)
+
+        gt_mask = gt_mask.squeeze()
+        pr_mask = pr_mask.squeeze().cpu().numpy()
+        pr_mask = pr_mask.round()  # use threshold?
+
+        smp.utils.custom_functions.plot_masks_overlay(
+            output_path=output_dir + "/masks-" + str(idx) + ".png",
+            image=image[0],
+            gt_mask=gt_mask,
+            pr_mask=pr_mask,
         )
-
-        # TODO: Run model inference on exported dataset
-        # model = load_model(model_path)
-
-        # smp.utils.custom_functions.plot_masks
-
-        # Export to PNG to view exported slices
-        images, masks = get_slices_paths(exported_slices_dir)
-        exported_slices_dir_png = exported_slices_dir + "png/"
-        os.mkdir(exported_slices_dir_png)
-        for idx, (image_path, mask_path) in enumerate(zip(images, masks)):
-            image = read_pil_image(image_path)
-            # image = normalize_0_1(image)
-            mask = read_pil_image(mask_path)
-            mask[mask > 0] = 1
-            save_sample_image(
-                image.T, mask.T, exported_slices_dir_png + str(idx).zfill(5) + ".png"
-            )
+        # smp.utils.custom_functions.visualize(
+        #     output_path=output_dir + "/split-" + str(idx) + ".png",
+        #     gt_mask=gt_mask,
+        #     pr_mask=pr_mask,
+        # )
+    print("time end", get_datetime_str())
+    plot_metrics_per_slice(metric_dice, metric_iou, output_dir)
 
 
 def save_sample_image(image, mask, output_file):

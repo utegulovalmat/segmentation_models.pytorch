@@ -191,8 +191,8 @@ def train_model(
         train_history.append(train_logs)
         valid_history.append(valid_logs)
 
-        if max_score < valid_logs["iou_score"]:
-            max_score = valid_logs["iou_score"]
+        if max_score < valid_logs["fscore"]:
+            max_score = valid_logs["fscore"]
             torch.save(model, output_dir + best_model_fn)
             logger.info("Model saved at epoch: " + str(epoch))
             best_epoch = epoch

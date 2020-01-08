@@ -422,9 +422,9 @@ def main():
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
             message = traceback.format_exc()
-        # print(message)
-        # send_email(title=title, message=message)
-        break
+        print(message)
+        send_email(title=title, message=message)
+        # break
     return 0
 
 

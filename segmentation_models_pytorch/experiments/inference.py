@@ -30,9 +30,6 @@ def export_volume_to_dir(
 
 
 def run_inference():
-    # args = inference_arg_parser().parse_args()
-    # input_dir = args.input_dir
-
     input_dir = "/home/a/Thesis/datasets/mri/"
     model_dir = "segmentation_models_pytorch/experiments/"
     model_name = "unet"

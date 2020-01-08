@@ -148,22 +148,22 @@ def train_model(
         train_dataset,
         batch_size=batch_size,
         num_workers=12,
-        # shuffle=True,
-        sampler=subset_sampler,
+        shuffle=True,
+        # sampler=subset_sampler,
     )
     valid_loader = DataLoader(
         valid_dataset,
         batch_size=1,
         num_workers=4,
-        # shuffle=False,
-        sampler=subset_sampler,
+        shuffle=False,
+        # sampler=subset_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        # shuffle=False,
-        sampler=subset_sampler,
+        shuffle=False,
+        # sampler=subset_sampler,
     )
     # Create epoch runners, it is a simple loop of iterating over DataLoader's samples
     train_epoch = smp.utils.train.TrainEpoch(
@@ -237,8 +237,8 @@ def train_model(
     image_volume = []
     gt_volume = []
     pr_volume = []
-    # for idx in range(130, len(test_dataset) - 100, 1):
-    for idx in range(150, len(test_dataset) - 200, 50):
+    # for idx in range(150, len(test_dataset) - 200, 50):
+    for idx in range(130, len(test_dataset) - 100, 1):
         image, gt_mask = test_dataset[idx]
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor).to(device)

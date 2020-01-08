@@ -1,5 +1,5 @@
 done,model,encoder,axis,epochs,batch
-no,fpn,resnet34,0,100,8
+no,fpn,resnet34,0,2,8
 no,fpn,resnet50,0,100,8
 no,fpn,inceptionv4,0,100,8
 no,unet,resnet34,0,100,8

@@ -148,22 +148,22 @@ def train_model(
         train_dataset,
         batch_size=batch_size,
         num_workers=12,
-        shuffle=True,
-        # sampler=subset_sampler,
+        # shuffle=True,
+        sampler=subset_sampler,
     )
     valid_loader = DataLoader(
         valid_dataset,
         batch_size=1,
         num_workers=4,
-        shuffle=False,
-        # sampler=subset_sampler,
+        # shuffle=False,
+        sampler=subset_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        shuffle=False,
-        # sampler=subset_sampler,
+        # shuffle=False,
+        sampler=subset_sampler,
     )
     # Create epoch runners, it is a simple loop of iterating over DataLoader's samples
     train_epoch = smp.utils.train.TrainEpoch(
@@ -237,11 +237,12 @@ def train_model(
     image_volume = []
     gt_volume = []
     pr_volume = []
-    for idx in range(130, len(test_dataset) - 100, 1):
+    # for idx in range(130, len(test_dataset) - 100, 1):
+    for idx in range(150, len(test_dataset) - 200, 50):
         image, gt_mask = test_dataset[idx]
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
-        pr_mask = model.predict(x_tensor)
-        gt_mask = torch.from_numpy(gt_mask)
+        pr_mask = model.predict(x_tensor).to(device)
+        gt_mask = torch.from_numpy(gt_mask).to(device)
 
         image_volume.append(image)
         gt_volume.append(gt_mask)
@@ -252,7 +253,7 @@ def train_model(
         metric_iou.append(iou)
         metric_dice.append(dice)
 
-        gt_mask = gt_mask.squeeze()
+        gt_mask = gt_mask.squeeze().cpu().numpy()
         pr_mask = pr_mask.squeeze().cpu().numpy()
         pr_mask = pr_mask.round()  # use threshold?
 
@@ -278,8 +279,6 @@ def train_model(
     message += "Train<br>\n" + best_train_row + "\n<br>"
     message += "Valid<br>\n" + best_valid_row + "\n<br>"
     message += "Test<br>\n" + best_test_row + "\n<br>"
-    message += "Metrics per slice Dice<br>\n" + str(list(metric_dice)) + "\n<br>"
-    message += "Metrics per slice IoU<br>\n" + str(list(metric_iou)) + "\n<br>"
     return message, results
 
 
@@ -423,9 +422,9 @@ def main():
             title = model + "-" + encoder + " FAILED"
             logger.info("Send email")
             message = traceback.format_exc()
-        print(message)
-        send_email(title=title, message=message)
-        # break
+        # print(message)
+        # send_email(title=title, message=message)
+        break
     return 0
 
 

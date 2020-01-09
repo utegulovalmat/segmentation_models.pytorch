@@ -31,7 +31,7 @@ from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
 from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
 from segmentation_models_pytorch.utils.custom_functions import set_global_seed
 from segmentation_models_pytorch.utils.custom_functions import (
-    get_train_augmentation_hardcore,
+    get_train_augmentation_medium,
 )
 from segmentation_models_pytorch.utils.data import MriDataset
 
@@ -83,7 +83,7 @@ def train_model(
     # augmentation = get_train_augmentation_hardcore()
     train_dataset = MriDataset(
         path=exported_slices_dir_train,
-        augmentation=get_train_augmentation_hardcore(),
+        augmentation=get_train_augmentation_medium(),
         preprocessing=get_preprocessing(),
     )
     logger.info("test_dataset: " + str(len(train_dataset)))

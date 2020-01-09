@@ -65,15 +65,13 @@ def get_train_augmentation_hardcore(hw_len=512):
 def get_train_augmentation_medium(hw_len=512):
     transform = [
         A.HorizontalFlip(p=0.5),
-        A.Rotate(limit=15, p=0.5),
-        A.RandomScale(scale_limit=0.10, p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
         A.GridDistortion(
             num_steps=5, distort_limit=0.3, interpolation=cv2.INTER_NEAREST
         ),
         A.Blur(blur_limit=3),
-        A.GaussNoise(var_limit=0.01),
-        A.ElasticTransform(),
-        A.CoarseDropout(),
+        # A.ElasticTransform(),
+        # A.CoarseDropout(),
         A.PadIfNeeded(
             min_height=hw_len,
             min_width=hw_len,

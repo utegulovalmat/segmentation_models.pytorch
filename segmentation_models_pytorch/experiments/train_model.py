@@ -205,7 +205,7 @@ def train_model(
                 logger.info(
                     "Decrease learning rate to " + str(optimizer.param_groups[0]["lr"])
                 )
-            if early_stop_epochs == 15:
+            if early_stop_epochs == 7:
                 logger.info("Early stopping at epoch: " + str(epoch))
                 break
 

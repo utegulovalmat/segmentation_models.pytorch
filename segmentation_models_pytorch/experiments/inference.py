@@ -68,10 +68,11 @@ def run_inference():
     pr_volume = []
     print("time start", get_datetime_str())
 
-    for idx in range(150, len(test_dataset) - 200, 50):
+    # axis 0/1 [130: 415]
+    # axis 2 [all]
+    # for idx in range(150, len(test_dataset) - 200, 50):  # test
+    for idx in range(0, len(test_dataset), 1):
         # for idx in range(130, len(test_dataset) - 100, 1):
-        # for idx in range(130, len(test_dataset) - 100, 2):
-        # for idx in range(0, len(test_dataset), 1):
         image, gt_mask = test_dataset[idx]
         x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
         pr_mask = model.predict(x_tensor)

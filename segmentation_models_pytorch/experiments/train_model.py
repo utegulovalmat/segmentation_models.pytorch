@@ -380,6 +380,7 @@ def main():
         new_print("train", get_fns(train_volumes))
         new_print("valid", get_fns(valid_volumes))
         new_print("test", get_fns(test_volumes))
+        logger.info("Slices are in " + str(input_dir))
         try:
             logger.info("\n\n\nStart training " + output_dir + "\n\n")
 

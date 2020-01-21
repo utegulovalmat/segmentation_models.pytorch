@@ -14,6 +14,7 @@ from segmentation_models_pytorch.experiments.helpers import get_datetime_str
 from segmentation_models_pytorch.utils.data import MriDataset
 from segmentation_models_pytorch.utils.custom_functions import get_preprocessing
 from segmentation_models_pytorch.utils.custom_functions import get_test_augmentation
+from segmentation_models_pytorch.utils.custom_functions import read_pil_image
 
 
 def export_volume_to_dir(
@@ -118,6 +119,21 @@ def save_sample_image(image, mask, output_file):
     plt.close(fig)
 
 
+def save_tif_to_png(
+    image, mask=None, output_dir=None, new_fn="input_sample.png",
+):
+    fig = plt.figure(figsize=(4, 4))
+    rows, columns = 1, 1
+    fig.add_subplot(rows, columns, 1)
+    plt.imshow(image, cmap="gray")
+    if mask:
+        fig.add_subplot(rows, columns, 2)
+        plt.imshow(mask)
+    # plt.show()
+    plt.savefig(fname=output_dir + new_fn)
+    plt.close(fig)
+
+
 def inference_arg_parser():
     parser = argparse.ArgumentParser(
         description="split 3d image into multiple 2d images"
@@ -151,5 +167,31 @@ def get_slices_paths(input_dir: str):
     return fns, mask_fns
 
 
+def convert_tif_folder_to_png(input_dir):
+    output_dir = input_dir + "/png"
+    if os.path.isdir(output_dir):
+        print("rmtree before extracting slices:", output_dir)
+        shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
+    print(output_dir)
+
+    for dirname, _, filenames in os.walk(input_dir):
+        for filename in filenames:
+            if "seg" not in filename:
+                image = read_pil_image(input_dir + "/" + filename)
+                save_tif_to_png(
+                    image.T,
+                    output_dir=output_dir + "/",
+                    new_fn=str(filename).split(".")[0] + ".png",
+                )
+
+
 if __name__ == "__main__":
-    run_inference()
+    # run_inference()
+    input_dirs = [
+        "/home/a/Thesis/datasets/mri/datasets_n4/tif_slices_train",
+        # '/home/a/Thesis/datasets/mri/datasets_n4/tif_slices_test',
+        # '/home/a/Thesis/datasets/mri/datasets_n4/tif_slices_valid',
+    ]
+    for input_dir in input_dirs:
+        convert_tif_folder_to_png(input_dir)

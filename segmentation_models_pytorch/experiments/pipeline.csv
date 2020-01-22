@@ -1,4 +1,4 @@
-done,model,encoder,axis,epochs,batchno,linknet,resnet34,1,100,8
+done,model,encoder,axis,epochs,batch
 no,linknet,resnet50,0,100,8
 no,linknet,inceptionv4,0,100,8
 no,pspnet,resnet50,0,100,8

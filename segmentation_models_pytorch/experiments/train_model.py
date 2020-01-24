@@ -153,14 +153,14 @@ def train_model(
     )
     valid_loader = DataLoader(
         valid_dataset,
-        batch_size=1,
+        batch_size=12,
         num_workers=4,
         shuffle=False,
         # sampler=subset_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=12,
         num_workers=4,
         shuffle=False,
         # sampler=subset_sampler,
